@@ -1,0 +1,56 @@
+{
+  "expo": {
+    "name": "SPC Field Force",
+    "slug": "spc-field-force",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "scheme": "spcfieldforce",
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "id.spc.fieldforce",
+      "infoPlist": {
+        "NSLocationWhenInUseUsageDescription": "Aplikasi memerlukan lokasi untuk check-in merchant, absensi, dan pelacakan rute.",
+        "NSLocationAlwaysAndWhenInUseUsageDescription": "Aplikasi memerlukan lokasi untuk check-in merchant, absensi, dan pelacakan rute.",
+        "NSCameraUsageDescription": "Kamera digunakan untuk foto lokasi merchant.",
+        "NSPhotoLibraryUsageDescription": "Galeri digunakan untuk melampirkan foto lokasi merchant."
+      }
+    },
+    "android": {
+      "package": "id.spc.fieldforce",
+      "adaptiveIcon": {
+        "backgroundColor": "#0F4C81",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      },
+      "permissions": [
+        "ACCESS_COARSE_LOCATION",
+        "ACCESS_FINE_LOCATION",
+        "CAMERA"
+      ],
+      "predictiveBackGestureEnabled": false
+    },
+    "web": {
+      "favicon": "./assets/favicon.png",
+      "bundler": "metro"
+    },
+    "plugins": [
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "Aplikasi memerlukan lokasi untuk check-in merchant, absensi, dan pelacakan rute.",
+          "locationAlwaysAndWhenInUsePermission": "Aplikasi memerlukan lokasi untuk check-in merchant, absensi, dan pelacakan rute."
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "cameraPermission": "Kamera digunakan untuk foto lokasi merchant.",
+          "photosPermission": "Galeri digunakan untuk melampirkan foto lokasi merchant."
+        }
+      ]
+    ]
+  }
+}

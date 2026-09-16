@@ -1,5 +1,5 @@
 import React from 'react';
-import { ActivityIndicator, Text, View } from 'react-native';
+import { ActivityIndicator, Text, TouchableOpacity, View } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { useFonts } from 'expo-font';
 import {
@@ -13,16 +13,17 @@ import {
   DefaultTheme,
   NavigationContainer,
 } from '@react-navigation/native';
-import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
+import { createBottomTabNavigator, BottomTabBarProps } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
-import { APP_NAME } from './src/config';
+import { APP_NAME, ROLE_LABEL } from './src/config';
 import { C, F } from './src/theme';
+import { useBreakpoint } from './src/utils/responsive';
 import { DialogHost } from './src/components/dialog';
 import { useCurrentUser, useStore } from './src/store/useStore';
-import { Role } from './src/types';
+import { Role, User } from './src/types';
 
 import LoginScreen from './src/screens/LoginScreen';
 import DashboardScreen from './src/screens/DashboardScreen';
@@ -52,7 +53,130 @@ const TAB_ICON: Record<string, keyof typeof Ionicons.glyphMap> = {
   Profil: 'person-circle-outline',
 };
 
-function MainTabs({ role }: { role: Role }) {
+const RAIL_WIDTH = 232;
+
+/** Kartu identitas ringkas di puncak rail (web/tablet) — memberi konteks "siapa saya & di mana" */
+function RailHeader({ me }: { me: User }) {
+  return (
+    <View style={{ paddingHorizontal: 18, paddingTop: 22, paddingBottom: 16 }}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+        <View
+          style={{
+            width: 34,
+            height: 34,
+            borderRadius: 10,
+            backgroundColor: C.primary,
+            alignItems: 'center',
+            justifyContent: 'center',
+          }}
+        >
+          <Ionicons name="footsteps" size={18} color="#fff" />
+        </View>
+        <Text style={{ color: '#fff', fontFamily: F.xbold, fontSize: 15 }}>{APP_NAME}</Text>
+      </View>
+      <View style={{ marginTop: 18, borderTopWidth: 1, borderColor: 'rgba(255,255,255,0.08)', paddingTop: 14 }}>
+        <Text style={{ color: '#fff', fontFamily: F.bold, fontSize: 13 }} numberOfLines={1}>
+          {me.name}
+        </Text>
+        <Text style={{ color: 'rgba(255,255,255,0.55)', fontFamily: F.reg, fontSize: 11.5, marginTop: 1 }}>
+          {ROLE_LABEL[me.role]}
+        </Text>
+      </View>
+    </View>
+  );
+}
+
+/** Tab bar responsif: rail vertikal tetap di web/tablet lebar (≥900dp), bottom tabs di mobile. */
+function ResponsiveTabBar({ state, navigation, isDesktop, me }: BottomTabBarProps & { isDesktop: boolean; me: User }) {
+  const routes = state.routes;
+
+  if (!isDesktop) {
+    return (
+      <View
+        style={{
+          flexDirection: 'row',
+          borderTopWidth: 1,
+          borderColor: C.border,
+          backgroundColor: C.card,
+          paddingTop: 6,
+          paddingBottom: 8,
+        }}
+      >
+        {routes.map((route, i) => {
+          const focused = state.index === i;
+          const color = focused ? C.primary : C.faint;
+          return (
+            <TouchableOpacity
+              key={route.key}
+              onPress={() => navigation.navigate(route.name)}
+              accessibilityRole="button"
+              accessibilityState={focused ? { selected: true } : {}}
+              style={{ flex: 1, alignItems: 'center', gap: 2, minHeight: 44, justifyContent: 'center' }}
+            >
+              <Ionicons name={TAB_ICON[route.name] ?? 'ellipse-outline'} size={21} color={color} />
+              <Text style={{ fontSize: 10.5, fontFamily: F.semi, color }}>{route.name}</Text>
+            </TouchableOpacity>
+          );
+        })}
+      </View>
+    );
+  }
+
+  return (
+    <View
+      style={{
+        position: 'absolute',
+        left: 0,
+        top: 0,
+        bottom: 0,
+        width: RAIL_WIDTH,
+        backgroundColor: C.railBg,
+      }}
+    >
+      <RailHeader me={me} />
+      <View style={{ paddingHorizontal: 12, gap: 2 }}>
+        {routes.map((route, i) => {
+          const focused = state.index === i;
+          return (
+            <TouchableOpacity
+              key={route.key}
+              onPress={() => navigation.navigate(route.name)}
+              accessibilityRole="button"
+              accessibilityState={focused ? { selected: true } : {}}
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: 12,
+                paddingVertical: 11,
+                paddingHorizontal: 12,
+                borderRadius: 10,
+                backgroundColor: focused ? 'rgba(37,99,235,0.22)' : 'transparent',
+              }}
+            >
+              <Ionicons
+                name={TAB_ICON[route.name] ?? 'ellipse-outline'}
+                size={19}
+                color={focused ? '#93B4FF' : 'rgba(255,255,255,0.6)'}
+              />
+              <Text
+                style={{
+                  fontSize: 13.5,
+                  fontFamily: focused ? F.bold : F.semi,
+                  color: focused ? '#FFFFFF' : 'rgba(255,255,255,0.7)',
+                }}
+              >
+                {route.name}
+              </Text>
+            </TouchableOpacity>
+          );
+        })}
+      </View>
+    </View>
+  );
+}
+
+function MainTabs({ role, me }: { role: Role; me: User }) {
+  const { isDesktop } = useBreakpoint();
   const tabs =
     role === 'super_admin'
       ? ['Dashboard', 'Merchant', 'Laporan', 'Pengguna', 'Profil']
@@ -81,15 +205,18 @@ function MainTabs({ role }: { role: Role }) {
 
   return (
     <Tabs.Navigator
+      tabBar={(props) => <ResponsiveTabBar {...props} isDesktop={isDesktop} me={me} />}
       screenOptions={({ route }) => ({
         headerStyle: { backgroundColor: C.primary, shadowOpacity: 0, borderBottomWidth: 0 },
         headerTintColor: '#FFFFFF',
         headerTitleStyle: { fontFamily: F.bold, fontSize: 17 },
         headerShadowVisible: false,
-        tabBarActiveTintColor: C.primary,
-        tabBarInactiveTintColor: C.faint,
-        tabBarLabelStyle: { fontFamily: F.semi, fontSize: 10.5 },
-        tabBarStyle: { borderTopColor: C.border, elevation: 0 },
+        sceneStyle: isDesktop ? { marginLeft: RAIL_WIDTH } : undefined,
+        headerRight: () => (
+          <View style={{ marginRight: 16, paddingHorizontal: 10, paddingVertical: 4, borderRadius: 999, backgroundColor: 'rgba(255,255,255,0.16)' }}>
+            <Text style={{ color: '#fff', fontFamily: F.semi, fontSize: 11.5 }}>{ROLE_LABEL[role]}</Text>
+          </View>
+        ),
         tabBarIcon: ({ color, size }) =>
           <Ionicons name={TAB_ICON[route.name] ?? 'ellipse-outline'} color={color} size={size} />,
       })}
@@ -157,8 +284,8 @@ export default function App() {
           </Stack.Navigator>
         ) : (
           <Stack.Navigator screenOptions={stackOpts}>
-            <Stack.Screen name="Main">
-              {() => <MainTabs role={user.role} />}
+            <Stack.Screen name="Main" options={{ headerShown: false }}>
+              {() => <MainTabs role={user.role} me={user} />}
             </Stack.Screen>
             <Stack.Screen
               name="MerchantDetail"

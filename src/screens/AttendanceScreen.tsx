@@ -1,32 +1,74 @@
-import React from 'react';
-import { FlatList, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { FlatList, Text, View } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
-import { Badge, Empty, H, Muted } from '../components/ui';
-import { C } from '../theme';
+import { Btn, Card, Empty, H, ListRow, Muted, StatusBadge } from '../components/ui';
+import { showDialog } from '../components/dialog';
+import { C, T } from '../theme';
 import { useCurrentUser, useStore } from '../store/useStore';
-import { fmtDate, fmtDurShort, fmtKm, fmtTime } from '../utils/format';
+import { fmtDate, fmtDurClock, fmtDurShort, fmtKm, fmtTime } from '../utils/format';
 import { polylineKm } from '../utils/geo';
 
-/** Riwayat absensi — clock in/out dikelola dari halaman utama (Dashboard). */
+/** Mirror ringkas dari sesi aktif — sebelumnya tab ini jadi jalan buntu bila sesi berlangsung
+ * dan pengguna harus balik ke Dashboard hanya utk clock-out. */
+function LiveSessionCard({ me }: { me: ReturnType<typeof useCurrentUser> }) {
+  const attendances = useStore((s) => s.attendances);
+  const clockOutStore = useStore((s) => s.clockOut);
+  const active = attendances.find((a) => a.userId === me!.id && !a.clockOutAt);
+  const [now, setNow] = useState(Date.now());
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    if (!active) return;
+    const t = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(t);
+  }, [active && active.id]);
+
+  if (!active) return null;
+
+  const doClockOut = async () => {
+    setBusy(true);
+    try {
+      const last = active.route[active.route.length - 1] ?? { lat: active.clockInLat, lng: active.clockInLng };
+      clockOutStore(last);
+      showDialog('Clock Out berhasil');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <Card>
+      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+        <H>Sesi Berlangsung</H>
+        <StatusBadge
+          label={active.geoFenceOk ? 'Dalam geo-fence' : 'Pengecualian'}
+          color={active.geoFenceOk ? C.ok : C.accent}
+          icon={active.geoFenceOk ? 'shield-checkmark' : 'warning'}
+        />
+      </View>
+      <Text style={[T.display, { color: C.primary, marginTop: 4 }]}>{fmtDurClock(now - active.clockInAt)}</Text>
+      <Muted style={{ marginBottom: 8 }}>
+        Masuk {fmtTime(active.clockInAt)} · {fmtKm(polylineKm(active.route))} · {active.route.length} titik rute
+      </Muted>
+      <Btn title="CLOCK OUT" variant="danger" onPress={doClockOut} disabled={busy} />
+    </Card>
+  );
+}
+
+/** Riwayat absensi — clock in dikelola dari tab Dashboard; clock out juga tersedia di sini. */
 export default function AttendanceScreen() {
-  const me = useCurrentUser()!;
+  const me = useCurrentUser();
   const attendances = useStore((s) => s.attendances);
   const navigation = useNavigation<any>();
 
   const mine = attendances
-    .filter((a) => a.userId === me.id)
+    .filter((a) => a.userId === me!.id)
     .sort((a, b) => b.clockInAt - a.clockInAt);
-
-  const active = mine.find((a) => !a.clockOutAt);
 
   return (
     <View style={{ flex: 1 }}>
-      {active && (
-        <Text style={styles.activeNote}>
-          Sesi absensi berlangsung ({fmtTime(active.clockInAt)}) — kelola CLOCK OUT dari tab Dashboard.
-        </Text>
-      )}
-      <View style={{ paddingHorizontal: 16, paddingTop: 12 }}>
+      <View style={{ paddingHorizontal: 16, paddingTop: 12, gap: 12 }}>
+        <LiveSessionCard me={me} />
         <H>Riwayat Absensi Saya ({mine.length})</H>
       </View>
       <FlatList
@@ -35,46 +77,15 @@ export default function AttendanceScreen() {
         contentContainerStyle={{ padding: 16, gap: 10 }}
         ListEmptyComponent={<Empty text="Belum ada riwayat. Mulai sesi dari tab Dashboard." />}
         renderItem={({ item: a }) => (
-          <TouchableOpacity
+          <ListRow
             onPress={() => navigation.navigate('AttendanceDetail', { id: a.id })}
-            style={[styles.item, { borderColor: a.clockOutAt ? C.border : C.warn }]}
-          >
-            <View style={styles.rowBetween}>
-              <Text style={styles.itemTitle}>{fmtDate(a.clockInAt)}</Text>
-              <Badge label={a.geoFenceOk ? 'OK' : 'Exception'} color={a.geoFenceOk ? C.ok : C.accent} />
-            </View>
-            <Muted>
-              {fmtTime(a.clockInAt)} → {a.clockOutAt ? fmtTime(a.clockOutAt) : 'berlangsung...'} ·{' '}
-              {fmtDurShort((a.clockOutAt ?? Date.now()) - a.clockInAt)} · {fmtKm(polylineKm(a.route))}
-            </Muted>
-          </TouchableOpacity>
+            title={fmtDate(a.clockInAt)}
+            subtitle={`${fmtTime(a.clockInAt)} → ${a.clockOutAt ? fmtTime(a.clockOutAt) : 'berlangsung...'} · ${fmtDurShort((a.clockOutAt ?? Date.now()) - a.clockInAt)} · ${fmtKm(polylineKm(a.route))}`}
+            trailing={<StatusBadge label={a.geoFenceOk ? 'OK' : 'Exception'} color={a.geoFenceOk ? C.ok : C.accent} icon={a.geoFenceOk ? 'checkmark-circle' : 'warning'} />}
+            emphasis={a.clockOutAt ? undefined : { color: C.warn, label: 'Berlangsung' }}
+          />
         )}
       />
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  activeNote: {
-    marginTop: 8,
-    marginHorizontal: 16,
-    padding: 10,
-    borderRadius: 10,
-    backgroundColor: C.warnBg,
-    color: C.warn,
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  rowBetween: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  item: {
-    backgroundColor: C.card,
-    borderRadius: 12,
-    padding: 12,
-    borderWidth: 1,
-  },
-  itemTitle: { fontWeight: '700', color: C.text },
-});

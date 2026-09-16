@@ -11,7 +11,7 @@ import { useNavigation, useRoute } from '@react-navigation/native';
 import * as DocumentPicker from 'expo-document-picker';
 import * as ImagePicker from 'expo-image-picker';
 import * as Location from 'expo-location';
-import { Badge, Btn, Card, Chip, Field, H, Input, Muted } from '../components/ui';
+import { Badge, Btn, Card, Chip, Field, H, Input, Muted, StatusBadge } from '../components/ui';
 import { showDialog } from '../components/dialog';
 import { RESULT_LABEL, RESULT_ORDER, VISIT_VALID_RADIUS_M } from '../config';
 import { C } from '../theme';
@@ -162,7 +162,11 @@ export default function VisitFlowScreen() {
       );
       return;
     }
-    doFinish();
+    // Check-out mengunci kunjungan secara permanen — konfirmasi agar tidak ke-tap tanpa sengaja.
+    showDialog('Selesaikan Kunjungan?', `Hasil: ${RESULT_LABEL[visit.result]}. Kunjungan tidak dapat diedit lagi setelah check-out.`, [
+      { label: 'Batal' },
+      { label: 'Check-out', onPress: doFinish },
+    ]);
   };
 
   // --- tampilan ketika belum ada kunjungan: mulai dari merchant ---
@@ -201,9 +205,13 @@ export default function VisitFlowScreen() {
   const done = !!visit.checkOutAt;
   // hanya agen pemilik kunjungan yang boleh mengedit; manager/client lihat saja
   const editable = !done && me.role === 'field_agent' && visit.agentId === me.id;
+  // sesi >12 jam kemungkinan besar lupa checkout (mis. HP mati) — tampilkan sbg butuh tinjauan,
+  // bukan jam raksasa yg tidak masuk akal (mis. 572:34:33)
+  const isStale = !done && now - visit.checkInAt > 12 * 3600000;
 
   return (
-    <ScrollView contentContainerStyle={{ padding: 16, gap: 12 }} keyboardShouldPersistTaps="handled">
+    <View style={{ flex: 1 }}>
+    <ScrollView contentContainerStyle={{ padding: 16, gap: 12, paddingBottom: editable ? 110 : 24 }} keyboardShouldPersistTaps="handled">
       <Card>
         <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
           <H style={{ flexShrink: 1 }}>{merchant?.name ?? '-'}</H>
@@ -212,14 +220,21 @@ export default function VisitFlowScreen() {
         <Muted style={{ marginTop: 4 }}>Check-in: {fmtDateTime(visit.checkInAt)}</Muted>
         <Muted>Check-out: {fmtDateTime(visit.checkOutAt)}</Muted>
         {!done && (
-          <Text style={{ fontSize: 28, fontWeight: '900', color: C.primary, marginTop: 4 }}>
-            {fmtDurClock(now - visit.checkInAt)}
-          </Text>
+          isStale ? (
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 6 }}>
+              <StatusBadge label="Sesi lama — perlu ditinjau" color={C.warn} icon="time-outline" />
+            </View>
+          ) : (
+            <Text style={{ fontSize: 28, fontWeight: '900', color: C.primary, marginTop: 4 }}>
+              {fmtDurClock(now - visit.checkInAt)}
+            </Text>
+          )
         )}
         <View style={{ flexDirection: 'row', gap: 8, marginTop: 8, flexWrap: 'wrap' }}>
-          <Badge
+          <StatusBadge
             label={visit.geoValid ? `Geo valid (${visit.merchantDistanceM ?? '-'} m)` : `Di luar radius (${visit.merchantDistanceM ?? '?'} m)`}
             color={visit.geoValid ? C.ok : C.accent}
+            icon={visit.geoValid ? 'checkmark-circle' : 'warning'}
           />
         </View>
         {!editable && (
@@ -338,23 +353,40 @@ export default function VisitFlowScreen() {
         )}
       </Card>
 
-      {editable ? (
-        <>
-          <Btn title="CHECK OUT & Simpan" variant="ok" onPress={checkOut} />
-          <Btn variant="outline" title="Simpan Draf (kembali nanti)" onPress={() => navigation.goBack()} />
-        </>
-      ) : done ? (
+      {done ? (
         <Card>
           <Muted>
             Kunjungan selesai. Durasi di lokasi:{' '}
             {Math.round(((visit.checkOutAt ?? 0) - visit.checkInAt) / 60000)} menit.
           </Muted>
         </Card>
-      ) : (
+      ) : !editable ? (
         <Card>
           <Muted>Kunjungan masih berlangsung — menunggu agen melakukan check-out.</Muted>
         </Card>
-      )}
+      ) : null}
     </ScrollView>
+
+      {editable && (
+        // sticky footer — dirender sbg sibling ScrollView di dalam View flex:1 pembungkus
+        <View
+          style={{
+            position: 'absolute',
+            left: 0,
+            right: 0,
+            bottom: 0,
+            padding: 16,
+            paddingTop: 10,
+            gap: 8,
+            backgroundColor: C.card,
+            borderTopWidth: 1,
+            borderColor: C.border,
+          }}
+        >
+          <Btn title="CHECK OUT & Simpan" variant="ok" onPress={checkOut} />
+          <Btn small variant="outline" title="Simpan Draf (kembali nanti)" onPress={() => navigation.goBack()} />
+        </View>
+      )}
+    </View>
   );
 }

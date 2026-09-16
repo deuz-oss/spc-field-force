@@ -224,8 +224,11 @@ export default function ReportsScreen() {
         <Muted style={{ marginTop: 2 }}>
           Rekap clock in/out, durasi kerja, jarak rute, dan kepatuhan geo-fence.
         </Muted>
+        <Muted style={{ marginTop: 6, fontWeight: '600' }}>
+          {attendances.filter((a) => scopedUserIds.has(a.userId) && inRange(a.clockInAt, range)).length} baris pada periode terpilih
+        </Muted>
         <View style={{ marginTop: 8 }}>
-          <Btn small title="Unduh CSV Absensi" onPress={exportAttendance} />
+          <Btn small variant="outline" title="Unduh CSV Absensi" onPress={exportAttendance} />
         </View>
       </Card>
 
@@ -234,8 +237,11 @@ export default function ReportsScreen() {
         <Muted style={{ marginTop: 2 }}>
           Detail semua visit termasuk bukti foto/dokumen dan validitas geo.
         </Muted>
+        <Muted style={{ marginTop: 6, fontWeight: '600' }}>
+          {visits.filter((v) => scopedUserIds.has(v.agentId) && inRange(v.checkInAt, range)).length} baris pada periode terpilih
+        </Muted>
         <View style={{ marginTop: 8 }}>
-          <Btn small title="Unduh CSV Kunjungan" onPress={exportVisits} />
+          <Btn small variant="outline" title="Unduh CSV Kunjungan" onPress={exportVisits} />
         </View>
       </Card>
 

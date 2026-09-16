@@ -1,6 +1,6 @@
 import React, { useMemo } from 'react';
 import { ScrollView, Text, View } from 'react-native';
-import { Badge, Btn, Card, H, Muted } from '../components/ui';
+import { Badge, Btn, Card, H, KPICard, Muted, SectionHeader } from '../components/ui';
 import { showDialog } from '../components/dialog';
 import { APP_NAME, ROLE_LABEL } from '../config';
 import { C } from '../theme';
@@ -8,32 +8,34 @@ import { useCurrentUser, useStore } from '../store/useStore';
 import { fmtDurShort, fmtKm, MONTHS_ID } from '../utils/format';
 import { polylineKm } from '../utils/geo';
 
+const FIELD_ROLES = ['field_agent', 'team_lead'];
+
 export default function ProfileScreen() {
   const me = useCurrentUser()!;
   const logout = useStore((s) => s.logout);
   const resetDemo = useStore((s) => s.resetDemo);
   const teams = useStore((s) => s.teams);
+  const users = useStore((s) => s.users);
+  const merchants = useStore((s) => s.merchants);
   const visits = useStore((s) => s.visits);
   const attendances = useStore((s) => s.attendances);
-  const merchants = useStore((s) => s.merchants);
 
   const monthStart = useMemo(() => {
     const d = new Date();
     return new Date(d.getFullYear(), d.getMonth(), 1).getTime();
   }, []);
 
-  const myVisits = visits.filter(
-    (v) => v.agentId === me.id && v.checkInAt >= monthStart,
-  );
+  const myVisits = visits.filter((v) => v.agentId === me.id && v.checkInAt >= monthStart);
   const myAtt = attendances.filter((a) => a.userId === me.id && a.clockInAt >= monthStart);
   const hours = myAtt.reduce((t, a) => t + ((a.clockOutAt ?? Date.now()) - a.clockInAt), 0);
   const km = myAtt.reduce((t, a) => t + polylineKm(a.route), 0);
   const myMerchants = merchants.filter((m) => m.assignedTo === me.id);
 
   const team = teams.find((t) => t.id === me.teamId);
+  const isFieldRole = FIELD_ROLES.includes(me.role);
 
   return (
-    <ScrollView contentContainerStyle={{ padding: 16, gap: 12 }}>
+    <ScrollView contentContainerStyle={{ padding: 16, gap: 12, maxWidth: 720, width: '100%', alignSelf: 'center' }}>
       <Card>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
           <View
@@ -64,32 +66,29 @@ export default function ProfileScreen() {
         </View>
       </Card>
 
-      <Card>
-        <H>Aktivitas Saya — Bulan Ini</H>
-        <Text style={{ color: C.muted, marginTop: 2, fontSize: 11 }}>
-          {MONTHS_ID[new Date().getMonth()]}
-        </Text>
-        <View style={{ flexDirection: 'row', gap: 8, marginTop: 10 }}>
-          <Card style={{ flex: 1 }}>
-            <Muted>Kunjungan</Muted>
-            <Text style={{ fontSize: 18, fontWeight: '800', color: C.primary }}>{myVisits.length}</Text>
-          </Card>
-          <Card style={{ flex: 1 }}>
-            <Mutable>Jam Kerja</Mutable>
-            <Text style={{ fontSize: 18, fontWeight: '800', color: C.info }}>{fmtDurShort(hours)}</Text>
-          </Card>
-        </View>
-        <View style={{ flexDirection: 'row', gap: 8, marginTop: 8 }}>
-          <Card style={{ flex: 1 }}>
-            <Muted>Jarak</Muted>
-            <Text style={{ fontSize: 18, fontWeight: '800', color: C.ok }}>{fmtKm(km)}</Text>
-          </Card>
-          <Card style={{ flex: 1 }}>
-            <Muted>Merchant Saya</Muted>
-            <Text style={{ fontSize: 18, fontWeight: '800', color: C.warn }}>{myMerchants.length}</Text>
-          </Card>
-        </View>
-      </Card>
+      {isFieldRole ? (
+        <Card>
+          <SectionHeader title="Aktivitas Saya — Bulan Ini" subtitle={MONTHS_ID[new Date().getMonth()]} />
+          <View style={{ flexDirection: 'row', gap: 8, marginTop: 10, flexWrap: 'wrap' }}>
+            <KPICard title="Kunjungan" value={String(myVisits.length)} status="neutral" />
+            <KPICard title="Jam Kerja" value={fmtDurShort(hours)} status="neutral" />
+            <KPICard title="Jarak" value={fmtKm(km)} status="neutral" />
+            <KPICard title="Merchant Saya" value={String(myMerchants.length)} status="neutral" />
+          </View>
+        </Card>
+      ) : (
+        <Card>
+          <SectionHeader title="Ringkasan Akses" subtitle="Lingkup pemantauan sesuai posisi Anda" />
+          <View style={{ gap: 8, marginTop: 10 }}>
+            <InfoLine label="Total Tim" value={String(teams.length)} />
+            <InfoLine label="Total Pengguna" value={String(users.filter((u) => u.active).length)} />
+            <InfoLine label="Total Merchant" value={String(merchants.length)} />
+          </View>
+          <Muted style={{ marginTop: 10 }}>
+            {ROLE_LABEL[me.role]} memantau data operasional secara agregat — bukan mencatat aktivitas lapangan pribadi.
+          </Muted>
+        </Card>
+      )}
 
       <Btn
         title="Keluar (Logout)"
@@ -120,6 +119,11 @@ export default function ProfileScreen() {
   );
 }
 
-function Mutable({ children }: { children: React.ReactNode }) {
-  return <Text style={{ color: C.muted, fontSize: 12 }}>{children}</Text>;
+function InfoLine({ label, value }: { label: string; value: string }) {
+  return (
+    <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+      <Muted>{label}</Muted>
+      <Text style={{ color: C.text, fontWeight: '700', fontSize: 13 }}>{value}</Text>
+    </View>
+  );
 }

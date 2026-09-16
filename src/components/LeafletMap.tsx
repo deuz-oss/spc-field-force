@@ -1,5 +1,5 @@
 import React from 'react';
-import { ActivityIndicator, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Platform, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import WebView from 'react-native-webview';
 import { C, R } from '../theme';
 
@@ -60,6 +60,22 @@ if(D.fit){
   map.setView([D.center.lat,D.center.lng],D.zoom);
 }
 </script></body></html>`;
+
+  // react-native-webview tidak berjalan di Web; pakai <iframe> DOM asli di jalur web
+  // (fallback ini memperbaiki bug "WebView does not support this platform" yang membuat
+  // pin merchant & rute absensi tidak pernah tampil saat app dibuka dari browser).
+  if (Platform.OS === 'web') {
+    return (
+      <View style={{ height, borderRadius: R.card, overflow: 'hidden', backgroundColor: C.border }}>
+        {React.createElement('iframe', {
+          srcDoc: html,
+          style: { border: 0, width: '100%', height: '100%' },
+          sandbox: 'allow-scripts allow-same-origin',
+          title: 'map',
+        })}
+      </View>
+    );
+  }
 
   return (
     <View style={{ height, borderRadius: R.card, overflow: 'hidden', backgroundColor: C.border }}>

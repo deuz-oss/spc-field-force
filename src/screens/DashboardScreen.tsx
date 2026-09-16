@@ -1,12 +1,26 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { ScrollView, Text, TouchableOpacity, View } from 'react-native';
+import { useNavigation } from '@react-navigation/native';
 import { PeriodPicker } from '../components/PeriodPicker';
-import { Badge, Btn, Card, Empty, H, Muted, MiniBar, StatCard } from '../components/ui';
+import {
+  Badge,
+  Btn,
+  Card,
+  Empty,
+  FunnelChart,
+  H,
+  KPICard,
+  ListRow,
+  Muted,
+  MiniBar,
+  SectionHeader,
+  StatusBadge,
+} from '../components/ui';
 import { showDialog } from '../components/dialog';
-import { C, STATUS_COLOR } from '../theme';
-import { MONITOR_ROLES } from '../config';
+import { C, STATUS_COLOR, T } from '../theme';
+import { MONITOR_ROLES, STATUS_LABEL } from '../config';
 import { useCurrentUser, useStore } from '../store/useStore';
-import { MerchantStatus, User } from '../types';
+import { Merchant, MerchantStatus, User } from '../types';
 import { fmtDurClock, fmtDurShort, fmtKm, MONTHS_ID } from '../utils/format';
 import { getCurrentCoords } from '../utils/location';
 import { haversineM, polylineKm } from '../utils/geo';
@@ -99,9 +113,10 @@ function ClockCard({ me }: { me: User }) {
       <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
         <H>Absensi</H>
         {active && (
-          <Badge
+          <StatusBadge
             label={active.geoFenceOk ? 'Dalam geo-fence' : 'Pengecualian geo-fence'}
             color={active.geoFenceOk ? C.ok : C.accent}
+            icon={active.geoFenceOk ? 'shield-checkmark' : 'warning'}
           />
         )}
       </View>
@@ -116,9 +131,7 @@ function ClockCard({ me }: { me: User }) {
         </>
       ) : (
         <>
-          <Text style={{ fontSize: 28, fontWeight: '900', color: C.primary, marginTop: 4 }}>
-            {fmtDurClock(now - active.clockInAt)}
-          </Text>
+          <Text style={[T.display, { color: C.primary, marginTop: 4 }]}>{fmtDurClock(now - active.clockInAt)}</Text>
           <Text style={{ color: C.muted, fontSize: 12, marginBottom: 8 }}>
             Masuk pukul{' '}
             {new Date(active.clockInAt).toLocaleTimeString('id-ID', {
@@ -169,14 +182,20 @@ export default function DashboardScreen() {
   const fenceOk = periodAtt.filter((a) => a.geoFenceOk).length;
   const fencePct = periodAtt.length ? Math.round((fenceOk / periodAtt.length) * 100) : null;
 
+  const closedVisits = periodVisits.filter((v) => v.checkOutAt);
+  const minStayMs = TARGETS.minStayMinutes * 60000;
+  const validVisitCount = closedVisits.filter(
+    (v) => v.geoValid && v.photos.length > 0 && (v.checkOutAt ?? 0) - v.checkInAt >= minStayMs,
+  ).length;
+  const validVisitPct = closedVisits.length ? Math.round((100 * validVisitCount) / closedVisits.length) : null;
+
   const merchantScopeList = MONITOR_ROLES.includes(me.role)
     ? merchants
     : me.role === 'team_lead'
     ? merchants.filter((m) => m.teamId === me.teamId)
     : merchants.filter((m) => m.assignedTo === me.id);
   const newMerchants = merchantScopeList.filter((m) => inRange(m.createdAt, range));
-  const byStatus = (st: MerchantStatus) =>
-    newMerchants.filter((m) => m.status === st).length;
+  const byStatus = (st: MerchantStatus) => newMerchants.filter((m) => m.status === st).length;
 
   // snapshot seluruh periode
   const snap = {
@@ -221,13 +240,15 @@ export default function DashboardScreen() {
     [kpiGroups, attendances, visits, merchants, range],
   );
 
-  // funnel tim (seluruh lingkup) untuk ringkasan onboarding
-  const teamFunnel = useMemo(
-    () => funnelCounts(periodVisits),
-    [periodVisits],
+  const exceptions = useMemo(
+    () => kpiStats.filter((s) => s.days > 0 && statusOf(s).label !== 'On Track'),
+    [kpiStats],
   );
 
-  const nameOf = (id: string) => users.find((u) => u.id === id)?.name ?? id;
+  // funnel tim (seluruh lingkup) untuk ringkasan onboarding
+  const teamFunnel = useMemo(() => funnelCounts(periodVisits), [periodVisits]);
+  const funnelData = FUNNEL_STEPS.map((label, i) => ({ label, value: teamFunnel[i] }));
+
   const teamName =
     me.role === 'field_agent'
       ? teams.find((t) => t.id === me.teamId)?.name
@@ -235,84 +256,116 @@ export default function DashboardScreen() {
       ? `Tim ${teams.find((t) => t.id === me.teamId)?.name}`
       : 'Seluruh Tim';
 
-  return (
-    <ScrollView contentContainerStyle={{ padding: 16, gap: 12 }}>
+  const periodLabel =
+    period === 'monthly' ? MONTHS_ID[month] : period === 'daily' ? 'Hari ini' : period === 'weekly' ? 'Minggu ini' : 'Semua waktu';
+
+  const headerAndPeriod = (
+    <>
       <View>
         <H style={{ fontSize: 18 }}>Dashboard</H>
         <Muted>
-          {teamName} ·{' '}
-          {period === 'monthly'
-            ? MONTHS_ID[month]
-            : period === 'daily'
-            ? 'Hari ini'
-            : period === 'weekly'
-            ? 'Minggu ini'
-            : 'Semua waktu'}
+          {teamName} · {periodLabel}
         </Muted>
       </View>
-
-      {me.role !== 'client' && me.role !== 'super_admin' && <ClockCard me={me} />}
-
       <PeriodPicker period={period} month={month} onPeriod={setPeriod} onMonth={setMonth} />
+    </>
+  );
 
-      <View style={{ flexDirection: 'row', gap: 10 }}>
-        <StatCard title="Kunjungan" value={String(periodVisits.length)} sub="check-in merchant" />
-        <StatCard
-          title="Jam Kerja"
-          value={fmtDurShort(hoursMs)}
-          sub={`${activeAgents} orang on-duty`}
+  if (me.role === 'field_agent') {
+    return (
+      <FieldAgentDashboard
+        me={me}
+        merchantScopeList={merchantScopeList}
+        header={headerAndPeriod}
+        stat={kpiStats[0]}
+        funnelData={funnelData}
+      />
+    );
+  }
+
+  return (
+    <ScrollView contentContainerStyle={{ padding: 16, gap: 12, maxWidth: 1180, width: '100%', alignSelf: 'center' }}>
+      {headerAndPeriod}
+
+      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>
+        <KPICard
+          title="Agen Aktif"
+          value={`${activeAgents}/${scopeIds.size}`}
+          target="dari total agen di lingkup"
+          status={scopeIds.size === 0 ? 'neutral' : activeAgents / Math.max(1, scopeIds.size) >= 0.8 ? 'ok' : 'warn'}
+        />
+        <KPICard
+          title="Geo-fence Compliance"
+          value={fencePct == null ? '—' : `${fencePct}%`}
+          target={`Target ≥${TARGETS.fencePct}%`}
+          status={fencePct == null ? 'neutral' : fencePct >= TARGETS.fencePct ? 'ok' : fencePct >= TARGETS.fencePct - 10 ? 'warn' : 'danger'}
+          statusLabel={fencePct == null ? 'Belum ada absensi' : undefined}
+        />
+        <KPICard
+          title="Kunjungan"
+          value={String(periodVisits.length)}
+          target={`${fmtDurShort(hoursMs)} jam kerja tim`}
+          status="neutral"
+        />
+        <KPICard
+          title="Valid Visit"
+          value={validVisitPct == null ? '—' : `${validVisitPct}%`}
+          target={`Target ≥${TARGETS.validVisitPct}%`}
+          status={validVisitPct == null ? 'neutral' : validVisitPct >= TARGETS.validVisitPct ? 'ok' : 'warn'}
+          statusLabel={validVisitPct == null ? 'Belum ada kunjungan selesai' : undefined}
+        />
+        <KPICard
+          title="Merchant Activated"
+          value={String(snap.activated)}
+          target={`dari ${merchantScopeList.length} merchant · +${byStatus('activated')} periode ini`}
+          status="ok"
         />
       </View>
-      <View style={{ flexDirection: 'row', gap: 10 }}>
-        <StatCard title="Jarak Tempuh" value={fmtKm(km)} sub="dari tracking rute" color={C.info} />
-        <StatCard
-          title="Merchant Baru"
-          value={String(newMerchants.length)}
-          sub={`CS ${byStatus('cold_start')} · Reg ${byStatus('registered')} · Act ${byStatus('activated')}`}
-          color={C.ok}
+
+      {exceptions.length > 0 && (
+        <Card>
+          <SectionHeader title="Perlu Perhatian" subtitle={`${exceptions.length} agen di bawah target periode ini`} />
+          <View style={{ gap: 8, marginTop: 10 }}>
+            {exceptions.slice(0, 6).map((s) => {
+              const st = statusOf(s);
+              return (
+                <TouchableOpacity key={s.userId} onPress={() => setOpenAgent(s.userId)} activeOpacity={0.7}>
+                  <ListRow
+                    title={s.name}
+                    subtitle={`${s.visits} kunjungan · ${fmtDurShort(s.workMs)} kerja · ${s.days} hari hadir`}
+                    trailing={<StatusBadge label={st.label} color={st.color} icon={st.label === 'Di Bawah Target' ? 'close-circle' : 'alert-circle'} />}
+                  />
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+        </Card>
+      )}
+
+      <Card>
+        <SectionHeader
+          title="Funnel Onboarding Merchant"
+          subtitle="Alur BD Field Merchant Onboarding sesuai RFP (jangkauan kumulatif periode ini)"
         />
-      </View>
-
-      <Card>
-        <H>Kepatuhan Geo-fence Absensi</H>
-        <Muted style={{ marginTop: 4 }}>
-          {fencePct == null ? 'Belum ada absensi pada periode ini.' : `${fencePct}% clock-in dalam geo-fence tim (${fenceOk}/${periodAtt.length}).`}
-        </Muted>
-      </Card>
-
-      <Card>
-        <H>Snapshot Merchant</H>
-        <Muted style={{ marginTop: 2 }}>Status terkini (seluruh periode)</Muted>
-        <View style={{ flexDirection: 'row', gap: 8, marginTop: 10 }}>
-          <StatCard title="Cold Start" value={String(snap.cold_start)} color={C.warn} />
-          <StatCard title="Registered" value={String(snap.registered)} color={C.info} />
-          <StatCard title="Activated" value={String(snap.activated)} color={C.ok} />
+        <View style={{ marginTop: 12 }}>
+          <FunnelChart steps={funnelData} />
         </View>
       </Card>
 
       <Card>
-        <H>Funnel Onboarding Merchant</H>
-        <Muted style={{ marginTop: 2 }}>
-          Alur BD Field Merchant Onboarding sesuai RFP (jangkauan kumulatif periode ini)
-        </Muted>
-        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 10 }}>
-          {FUNNEL_STEPS.map((step, i) => (
-            <Badge
-              key={step}
-              label={`${step} ${teamFunnel[i]}`}
-              color={i === 0 ? C.muted : i >= 5 ? C.ok : C.info}
-            />
-          ))}
+        <SectionHeader title="Snapshot Merchant" subtitle="Status terkini (seluruh periode)" />
+        <View style={{ flexDirection: 'row', gap: 8, marginTop: 10, flexWrap: 'wrap' }}>
+          <KPICard title="Cold Start" value={String(snap.cold_start)} status="warn" statusLabel="Perlu di-visit" />
+          <KPICard title="Registered" value={String(snap.registered)} status="neutral" statusLabel="Dalam proses" />
+          <KPICard title="Activated" value={String(snap.activated)} status="ok" statusLabel="Selesai" />
         </View>
       </Card>
 
       <Card>
-        <H>Performance KPI</H>
-        <Muted style={{ marginTop: 2 }}>
-          Target RFP: kerja 8 jam/hari · on-site ≥6 jam/hari · geo-fence ≥{TARGETS.fencePct}% · route check-in ≥
-          {TARGETS.routePct}% · valid visit ≥{TARGETS.validVisitPct}% (geofence + durasi ≥
-          {TARGETS.minStayMinutes} mnt + bukti foto). Ketuk agen untuk rincian.
-        </Muted>
+        <SectionHeader
+          title="Performance KPI"
+          subtitle={`Target RFP: kerja 8j/hari · on-site ≥6j/hari · geo-fence ≥${TARGETS.fencePct}% · route ≥${TARGETS.routePct}% · valid visit ≥${TARGETS.validVisitPct}%. Ketuk agen untuk rincian.`}
+        />
 
         {kpiStats.length > 1 && (
           <View style={{ flexDirection: 'row', gap: 6, marginTop: 10 }}>
@@ -333,100 +386,151 @@ export default function DashboardScreen() {
               {stats.length === 0 ? (
                 <Empty text="Belum ada anggota." />
               ) : (
-                stats.map((s) => {
-                  const st = statusOf(s);
-                  const open = openAgent === s.userId;
-                  return (
-                    <TouchableOpacity
-                      key={s.userId}
-                      activeOpacity={0.7}
-                      onPress={() => setOpenAgent(open ? null : s.userId)}
-                      style={{
-                        marginTop: 8,
-                        borderWidth: 1,
-                        borderColor: open ? C.primary : C.divider,
-                        borderRadius: 12,
-                        padding: 12,
-                        backgroundColor: open ? C.surfaceAlt : C.card,
-                      }}
-                    >
-                      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <Text style={{ fontWeight: '700', color: C.text, flexShrink: 1 }} numberOfLines={1}>
-                          {s.name}
-                        </Text>
-                        <Badge label={st.label} color={st.color} />
-                      </View>
-                      <Muted style={{ marginTop: 4 }}>
-                        {s.visits} kunjungan · {fmtDurShort(s.workMs)} kerja · {fmtKm(s.km)} · {s.days} hari hadir ·{' '}
-                        {s.distinctMerchants}/{s.assignedTotal} merchant ter-assign
-                      </Muted>
-
-                      {open && (
-                        <View style={{ marginTop: 10 }}>
-                          <MiniBar
-                            label={`Working hours/hari — ${fmtDurShort(s.avgWorkMsDay)} (target ${TARGETS.workHoursDay} j)`}
-                            value={Math.min(100, Math.round((100 * s.avgWorkMsDay) / (TARGETS.workHoursDay * 3600000)))}
-                            max={100}
-                            suffix="%"
-                            color={passFailColor(s.workMs >= s.targetWorkMs * 0.75)}
-                          />
-                          <MiniBar
-                            label={`On-site outreach/hari — ${fmtDurShort(s.avgOnsiteMsDay)} (target ≥${TARGETS.onsiteHoursDay} j)`}
-                            value={Math.min(100, Math.round((100 * s.avgOnsiteMsDay) / (TARGETS.onsiteHoursDay * 3600000)))}
-                            max={100}
-                            suffix="%"
-                            color={passFailColor(s.onSiteMs >= s.targetOnsiteMs * 0.6)}
-                          />
-                          <MiniBar
-                            label={`Geo-fence compliance${s.fencePct == null ? ' (tanpa absensi)' : ` — ${s.fencePct}%`}`}
-                            value={s.fencePct ?? 0}
-                            max={100}
-                            suffix="%"
-                            color={passFailColor(s.fencePct != null && s.fencePct >= TARGETS.fencePct)}
-                          />
-                          <MiniBar
-                            label={`Route check-in completion${s.routeCompletionPct == null ? ' (belum ada assign)' : ` — ${s.routeCompletionPct}%`}`}
-                            value={s.routeCompletionPct ?? 0}
-                            max={100}
-                            suffix="%"
-                            color={passFailColor(
-                              s.routeCompletionPct != null && s.routeCompletionPct >= TARGETS.routePct,
-                            )}
-                          />
-                          <MiniBar
-                            label={`Valid visit${s.validVisitPct == null ? ' (belum ada kunjungan)' : ` — ${s.validVisitPct}%`}`}
-                            value={s.validVisitPct ?? 0}
-                            max={100}
-                            suffix="%"
-                            color={passFailColor(
-                              s.validVisitPct != null && s.validVisitPct >= TARGETS.validVisitPct,
-                            )}
-                          />
-
-                          <Muted style={{ marginTop: 12, fontWeight: '600' }}>Funnel individu:</Muted>
-                          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 6 }}>
-                            {FUNNEL_STEPS.map((step, i) => (
-                              <Badge
-                                key={step}
-                                label={`${shortStep(step)} ${s.funnel[i]}`}
-                                color={i === 0 ? C.muted : i >= 5 ? C.ok : C.info}
+                <View style={{ gap: 8, marginTop: 6 }}>
+                  {stats.map((s) => {
+                    const st = statusOf(s);
+                    const open = openAgent === s.userId;
+                    return (
+                      <View key={s.userId}>
+                        <TouchableOpacity activeOpacity={0.7} onPress={() => setOpenAgent(open ? null : s.userId)}>
+                          <ListRow
+                            title={s.name}
+                            subtitle={`${s.visits} kunjungan · ${fmtDurShort(s.workMs)} kerja · ${fmtKm(s.km)} · ${s.days} hari hadir · ${s.distinctMerchants}/${s.assignedTotal} merchant`}
+                            trailing={
+                              <StatusBadge
+                                label={st.label}
+                                color={st.color}
+                                icon={st.label === 'On Track' ? 'checkmark-circle' : st.label === 'Perlu Perhatian' ? 'alert-circle' : st.label === 'Tanpa Absensi' ? 'remove-circle-outline' : 'close-circle'}
                               />
-                            ))}
-                          </View>
+                            }
+                          />
+                        </TouchableOpacity>
 
-                          <View style={{ flexDirection: 'row', gap: 8, marginTop: 12, flexWrap: 'wrap' }}>
-                            <Badge label={`${s.days} hari hadir`} color={C.teal} />
-                            <Badge label={`${s.km.toLocaleString('id-ID')} km rute`} color={C.purple} />
-                          </View>
-                        </View>
-                      )}
-                    </TouchableOpacity>
-                  );
-                })
+                        {open && (
+                          <Card style={{ marginTop: 6, borderTopLeftRadius: 4, borderTopRightRadius: 4 }}>
+                            <MiniBar
+                              label={`Working hours/hari — ${fmtDurShort(s.avgWorkMsDay)} (target ${TARGETS.workHoursDay} j)`}
+                              value={Math.min(100, Math.round((100 * s.avgWorkMsDay) / (TARGETS.workHoursDay * 3600000)))}
+                              max={100}
+                              suffix="%"
+                              color={passFailColor(s.workMs >= s.targetWorkMs * 0.75)}
+                            />
+                            <MiniBar
+                              label={`On-site outreach/hari — ${fmtDurShort(s.avgOnsiteMsDay)} (target ≥${TARGETS.onsiteHoursDay} j)`}
+                              value={Math.min(100, Math.round((100 * s.avgOnsiteMsDay) / (TARGETS.onsiteHoursDay * 3600000)))}
+                              max={100}
+                              suffix="%"
+                              color={passFailColor(s.onSiteMs >= s.targetOnsiteMs * 0.6)}
+                            />
+                            <MiniBar
+                              label={`Geo-fence compliance${s.fencePct == null ? ' (tanpa absensi)' : ` — ${s.fencePct}%`}`}
+                              value={s.fencePct ?? 0}
+                              max={100}
+                              suffix="%"
+                              color={passFailColor(s.fencePct != null && s.fencePct >= TARGETS.fencePct)}
+                            />
+                            <MiniBar
+                              label={`Route check-in completion${s.routeCompletionPct == null ? ' (belum ada assign)' : ` — ${s.routeCompletionPct}%`}`}
+                              value={s.routeCompletionPct ?? 0}
+                              max={100}
+                              suffix="%"
+                              color={passFailColor(s.routeCompletionPct != null && s.routeCompletionPct >= TARGETS.routePct)}
+                            />
+                            <MiniBar
+                              label={`Valid visit${s.validVisitPct == null ? ' (belum ada kunjungan)' : ` — ${s.validVisitPct}%`}`}
+                              value={s.validVisitPct ?? 0}
+                              max={100}
+                              suffix="%"
+                              color={passFailColor(s.validVisitPct != null && s.validVisitPct >= TARGETS.validVisitPct)}
+                            />
+
+                            <Muted style={{ marginTop: 12, fontWeight: '600' }}>Funnel individu:</Muted>
+                            <View style={{ marginTop: 8 }}>
+                              <FunnelChart steps={FUNNEL_STEPS.map((label, i) => ({ label: shortStep(label), value: s.funnel[i] }))} />
+                            </View>
+                          </Card>
+                        )}
+                      </View>
+                    );
+                  })}
+                </View>
               )}
             </View>
           );
         })}
+      </Card>
+    </ScrollView>
+  );
+}
+
+/** Dashboard Field Agent — fokus "apa yang harus saya kerjakan hari ini", bukan analitik tim. */
+function FieldAgentDashboard({
+  me,
+  merchantScopeList,
+  header,
+  stat,
+  funnelData,
+}: {
+  me: User;
+  merchantScopeList: Merchant[];
+  header: React.ReactNode;
+  stat?: AgentStat;
+  funnelData: Array<{ label: string; value: number }>;
+}) {
+  const navigation = useNavigation<any>();
+
+  const priority = useMemo(() => {
+    const rank: Record<MerchantStatus, number> = { cold_start: 0, registered: 1, activated: 2 };
+    return [...merchantScopeList].sort((a, b) => rank[a.status] - rank[b.status]).slice(0, 5);
+  }, [merchantScopeList]);
+
+  return (
+    <ScrollView contentContainerStyle={{ padding: 16, gap: 12 }}>
+      {header}
+
+      <ClockCard me={me} />
+
+      {stat && (
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>
+          <KPICard title="Kunjungan" value={String(stat.visits)} target="periode ini" status="neutral" />
+          <KPICard
+            title="Valid Visit"
+            value={stat.validVisitPct == null ? '—' : `${stat.validVisitPct}%`}
+            target={`Target ≥${TARGETS.validVisitPct}%`}
+            status={stat.validVisitPct == null ? 'neutral' : stat.validVisitPct >= TARGETS.validVisitPct ? 'ok' : 'warn'}
+            statusLabel={stat.validVisitPct == null ? 'Belum ada kunjungan selesai' : undefined}
+          />
+        </View>
+      )}
+
+      <Card>
+        <SectionHeader
+          title="Merchant Prioritas"
+          subtitle="Merchant ter-assign ke Anda, cold start didahulukan"
+          action={{ label: 'Lihat semua', onPress: () => navigation.navigate('Merchant') }}
+        />
+        {priority.length === 0 ? (
+          <Empty text="Belum ada merchant yang di-assign ke Anda." />
+        ) : (
+          <View style={{ gap: 8, marginTop: 10 }}>
+            {priority.map((m) => (
+              <ListRow
+                key={m.id}
+                title={m.name}
+                subtitle={m.address}
+                onPress={() => navigation.navigate('MerchantDetail', { merchantId: m.id })}
+                trailing={<Badge label={STATUS_LABEL[m.status]} color={STATUS_COLOR[m.status]} />}
+              />
+            ))}
+          </View>
+        )}
+      </Card>
+
+      <Card>
+        <SectionHeader title="Funnel Onboarding Saya" subtitle="Jangkauan kumulatif periode ini" />
+        <View style={{ marginTop: 10 }}>
+          <FunnelChart steps={funnelData} />
+        </View>
       </Card>
     </ScrollView>
   );

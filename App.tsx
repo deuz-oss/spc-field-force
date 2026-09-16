@@ -213,8 +213,23 @@ function MainTabs({ role, me }: { role: Role; me: User }) {
         headerShadowVisible: false,
         sceneStyle: isDesktop ? { marginLeft: RAIL_WIDTH } : undefined,
         headerRight: () => (
-          <View style={{ marginRight: 16, paddingHorizontal: 10, paddingVertical: 4, borderRadius: 999, backgroundColor: 'rgba(255,255,255,0.16)' }}>
-            <Text style={{ color: '#fff', fontFamily: F.semi, fontSize: 11.5 }}>{ROLE_LABEL[role]}</Text>
+          <View
+            style={{
+              marginRight: 16,
+              maxWidth: 170,
+              paddingHorizontal: 10,
+              paddingVertical: 4,
+              borderRadius: 999,
+              backgroundColor: 'rgba(255,255,255,0.16)',
+            }}
+          >
+            <Text
+              numberOfLines={1}
+              ellipsizeMode="tail"
+              style={{ color: '#fff', fontFamily: F.semi, fontSize: 11.5 }}
+            >
+              {ROLE_LABEL[role]}
+            </Text>
           </View>
         ),
         tabBarIcon: ({ color, size }) =>

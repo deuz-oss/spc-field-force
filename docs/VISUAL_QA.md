@@ -44,6 +44,13 @@ Method: ran `expo start --web` on port 8081, logged in via each demo account, an
 - **Before:** double header — a Stack header ("Main") stacked directly above the Tab header, wasting ~120px vertically on every screen.
 - **After:** single header, now carrying a role badge; desktop/tablet (≥900px) additionally get a persistent left rail with user identity, replacing the bottom tab bar only at that width — mobile bottom tabs are untouched.
 
-## Known limitation of this QA pass
+## Mobile verification (Android emulator, real device pixels)
 
-This session's Chrome window could not be resized below ~1280px width — `resize_window` reported success but `window.innerWidth` never changed, and Windows appears to keep the automation-controlled window at a fixed/managed size. **The `isDesktop`/`isTablet` breakpoint logic was verified by code review only, not by an actual sub-900px or sub-400px screenshot.** The mobile bottom-tab bar and single-column screen layouts are the app's *original*, previously-shipped behavior (unchanged by this redesign except for the components rendered inside them), which lowers the risk, but a real device/emulator or a differently-configured browser window should be used to confirm the small-mobile breakpoint before shipping.
+The Chrome window in the initial QA pass could not be resized below ~1280px (`resize_window` reported success but `window.innerWidth` never changed), so the small-mobile breakpoint was first verified by code review only. This was closed out with an actual Android emulator (`emulator-5554`, Android 14) already running on the dev machine, loaded via Expo Go over the same Metro dev server:
+
+- **Login:** correct single-column mobile layout, brand hero, collapsed demo disclosure — matches the design intent for narrow widths.
+- **Dashboard (Field Agent):** bottom tab bar (not the desktop rail) renders as expected; personal KPI cards, Merchant Prioritas list all correct.
+- **Merchant Detail:** map renders correctly (native `WebView` path, unaffected by the web `<iframe>` fix); sticky CHECK IN bar and visit history both correct.
+- **Bug found and fixed via this device pass:** the header's role badge (`ROLE_LABEL[role]`, e.g. "Field Agent (merangkap Incubation Agent)") had no line-wrap guard, so on a real ~360–411dp-wide phone it wrapped to two lines and made the header uneven — invisible on the wide desktop window used for the rest of this QA pass. Fixed in `App.tsx` with `numberOfLines={1}`, `ellipsizeMode="tail"`, and a `maxWidth: 170` cap on the badge container.
+
+Tablet width (700–900dp) remains unverified by screenshot (only mobile <400dp and desktop ≥1280dp were checked); low risk since that range only affects `gridCols`/`contentMaxWidth`, not a structural layout switch.

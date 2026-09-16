@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { ScrollView, Text, View } from 'react-native';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import * as Location from 'expo-location';
-import { Btn, Card, Chip, Field, H, Input } from '../components/ui';
+import { Btn, Card, Chip, Field, Input, SectionHeader } from '../components/ui';
 import { showDialog } from '../components/dialog';
 import { TIER_LABEL } from '../config';
 import { C } from '../theme';
@@ -74,8 +74,8 @@ export default function MerchantFormScreen() {
   };
 
   return (
-    <ScrollView contentContainerStyle={{ padding: 16, gap: 12 }}>
-      <H>{editing ? 'Edit Merchant' : 'Tambah Merchant'}</H>
+    <ScrollView contentContainerStyle={{ padding: 16, gap: 12, maxWidth: 640, width: '100%', alignSelf: 'center' }}>
+      <SectionHeader title={editing ? 'Edit Merchant' : 'Tambah Merchant'} />
       <Card style={{ gap: 12 }}>
         <Field label="Nama Merchant *">
           <Input value={name} onChangeText={setName} placeholder="cth. Warung Makan Bu Sri" />

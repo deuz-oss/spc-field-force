@@ -206,7 +206,7 @@ export default function ReportsScreen() {
   }, [visits, scopedUserIds, users, range, teams, teamId]);
 
   return (
-    <ScrollView contentContainerStyle={{ padding: 16, gap: 12 }}>
+    <ScrollView contentContainerStyle={{ padding: 16, gap: 12, maxWidth: 900, width: '100%', alignSelf: 'center' }}>
       <H>Laporan</H>
       <PeriodPicker period={period} month={month} onPeriod={setPeriod} onMonth={setMonth} />
 

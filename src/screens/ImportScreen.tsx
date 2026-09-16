@@ -2,7 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { ScrollView, Text, View } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import * as DocumentPicker from 'expo-document-picker';
-import { Badge, Btn, Card, Chip, Empty, H, Muted } from '../components/ui';
+import { Badge, Btn, Card, Chip, Empty, H, Muted, SectionHeader } from '../components/ui';
 import { showDialog } from '../components/dialog';
 import { STATUS_LABEL, TIER_LABEL, MANAGER_ROLES } from '../config';
 import { C, STATUS_COLOR } from '../theme';
@@ -150,8 +150,8 @@ export default function ImportScreen() {
   }
 
   return (
-    <ScrollView contentContainerStyle={{ padding: 16, gap: 12 }}>
-      <H>Impor Daftar Merchant</H>
+    <ScrollView contentContainerStyle={{ padding: 16, gap: 12, maxWidth: 900, width: '100%', alignSelf: 'center' }}>
+      <SectionHeader title="Impor Daftar Merchant" subtitle="Unggah CSV, lalu tetapkan ke agen sebelum menyimpan" />
       <Card>
         <Muted>
           Format kolom CSV:{'\n'}
@@ -169,10 +169,13 @@ export default function ImportScreen() {
       {rows && (
         <>
           <Card>
-            <H>{rows.length} merchant terbaca</H>
+            <SectionHeader
+              title={`${rows.length} merchant terbaca`}
+              subtitle={assignable.length > 0 ? 'Pilih agen tujuan sebelum mengimpor' : undefined}
+            />
             {assignable.length > 0 && (
               <>
-                <Muted style={{ marginTop: 6 }}>Assign semua ke agen (opsional):</Muted>
+                <Muted style={{ marginTop: 10, fontWeight: '600' }}>Assign semua ke agen (opsional):</Muted>
                 <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 6 }}>
                   <Chip label="Tanpa assign" active={agentId == null} onPress={() => setAgentId(null)} />
                   {assignable.map((a) => (

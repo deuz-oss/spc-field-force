@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { ScrollView, Switch, Text, TouchableOpacity, View } from 'react-native';
-import { Badge, Btn, Card, Chip, Field, H, Input, Muted } from '../components/ui';
+import { Badge, Btn, Card, Chip, Field, Input, Muted, SectionHeader, StatusBadge } from '../components/ui';
 import { showDialog } from '../components/dialog';
 import { ROLE_LABEL } from '../config';
 import { C } from '../theme';
@@ -111,12 +111,18 @@ export default function UsersScreen() {
     ]);
   };
 
+  const activeCount = users.filter((u) => u.active).length;
+
   return (
-    <ScrollView contentContainerStyle={{ padding: 16, gap: 12 }} keyboardShouldPersistTaps="handled">
-      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-        <H>Pengguna ({users.length})</H>
-        <Btn small variant="outline" title={showForm ? 'Tutup' : '+ Pengguna'} onPress={() => setShowForm(!showForm)} />
-      </View>
+    <ScrollView
+      contentContainerStyle={{ padding: 16, gap: 12, maxWidth: 900, width: '100%', alignSelf: 'center' }}
+      keyboardShouldPersistTaps="handled"
+    >
+      <SectionHeader
+        title={`Pengguna (${users.length})`}
+        subtitle={`${activeCount} aktif · ${users.length - activeCount} nonaktif`}
+        action={{ label: showForm ? 'Tutup' : '+ Pengguna', onPress: () => setShowForm(!showForm) }}
+      />
 
       {showForm && (
         <Card style={{ gap: 10 }}>
@@ -166,7 +172,11 @@ export default function UsersScreen() {
             <View style={{ flexDirection: 'row', gap: 6, marginTop: 8, flexWrap: 'wrap', alignItems: 'center' }}>
               <Badge label={ROLE_LABEL[u.role]} color={ROLE_COLOR[u.role]} />
               {u.teamId && <Badge label={teams.find((t) => t.id === u.teamId)?.name ?? '-'} color={C.muted} />}
-              {!u.active && <Badge label="Nonaktif" color={C.accent} />}
+              <StatusBadge
+                label={u.active ? 'Aktif' : 'Nonaktif'}
+                color={u.active ? C.ok : C.accent}
+                icon={u.active ? 'checkmark-circle' : 'close-circle'}
+              />
             </View>
 
             {editing ? (
@@ -213,10 +223,10 @@ export default function UsersScreen() {
         );
       })}
 
-      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 8 }}>
-        <H>Tim ({teams.length})</H>
-        <Btn small variant="outline" title={showTeam ? 'Tutup' : '+ Tim'} onPress={() => setShowTeam(!showTeam)} />
-      </View>
+      <SectionHeader
+        title={`Tim (${teams.length})`}
+        action={{ label: showTeam ? 'Tutup' : '+ Tim', onPress: () => setShowTeam(!showTeam) }}
+      />
 
       {showTeam && (
         <Card style={{ gap: 10 }}>
@@ -239,9 +249,7 @@ export default function UsersScreen() {
               setShowTeam(false);
             }}
           />
-          <TouchableOpacity onPress={() => undefined}>
-            <Muted>Pusat geo-fence default Jakarta; koordinat dapat disesuaikan nanti.</Muted>
-          </TouchableOpacity>
+          <Muted>Pusat geo-fence default Jakarta; koordinat dapat disesuaikan nanti.</Muted>
         </Card>
       )}
 

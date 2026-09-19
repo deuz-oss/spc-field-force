@@ -1,13 +1,13 @@
 import React, { useState } from 'react';
 import { ScrollView, Text, View } from 'react-native';
 import { useNavigation, useRoute } from '@react-navigation/native';
-import * as Location from 'expo-location';
 import { Btn, Card, Chip, Field, Input, SectionHeader } from '../components/ui';
 import { showDialog } from '../components/dialog';
 import { TIER_LABEL } from '../config';
 import { C } from '../theme';
 import { merchantScope, useCurrentUser, useStore } from '../store/useStore';
 import { CityTier, Merchant } from '../types';
+import { LocationPermissionDeniedError, requestCurrentCoords } from '../utils/location';
 import { uid } from '../utils/uuid';
 
 export default function MerchantFormScreen() {
@@ -32,14 +32,15 @@ export default function MerchantFormScreen() {
   const grabLocation = async () => {
     setBusy(true);
     try {
-      const { status } = await Location.requestForegroundPermissionsAsync();
-      if (status !== 'granted') {
+      const { lat: newLat, lng: newLng } = await requestCurrentCoords();
+      setLat(newLat.toFixed(6));
+      setLng(newLng.toFixed(6));
+    } catch (e) {
+      if (e instanceof LocationPermissionDeniedError) {
         showDialog('Izin lokasi diperlukan');
-        return;
+      } else {
+        showDialog('Gagal', 'Tidak dapat mengambil lokasi. Coba lagi.');
       }
-      const pos = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
-      setLat(pos.coords.latitude.toFixed(6));
-      setLng(pos.coords.longitude.toFixed(6));
     } finally {
       setBusy(false);
     }

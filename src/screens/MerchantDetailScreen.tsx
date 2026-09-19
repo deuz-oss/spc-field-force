@@ -10,6 +10,7 @@ import { useCurrentUser, useStore } from '../store/useStore';
 import { MerchantStatus } from '../types';
 import { fmtDateTime, fmtDurShort } from '../utils/format';
 import { haversineM } from '../utils/geo';
+import { LocationPermissionDeniedError, requestCurrentCoords } from '../utils/location';
 
 export default function MerchantDetailScreen() {
   const route = useRoute<any>();
@@ -51,28 +52,21 @@ export default function MerchantDetailScreen() {
       return;
     }
     try {
-      const Location = await import('expo-location');
-      const { status } = await Location.requestForegroundPermissionsAsync();
-      if (status !== 'granted') {
-        showDialog('Izin lokasi diperlukan', 'Aktifkan izin lokasi untuk check-in di merchant.');
-        return;
-      }
-      const pos = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
+      const { lat, lng } = await requestCurrentCoords();
       let dist: number | null = null;
       let geoValid = true;
       if (merchant.lat != null && merchant.lng != null) {
-        dist = Math.round(
-          haversineM(
-            { lat: merchant.lat, lng: merchant.lng },
-            { lat: pos.coords.latitude, lng: pos.coords.longitude },
-          ),
-        );
+        dist = Math.round(haversineM({ lat: merchant.lat, lng: merchant.lng }, { lat, lng }));
         geoValid = dist <= VISIT_VALID_RADIUS_M;
       }
-      const id = await startVisit(merchant.id, me.id, { lat: pos.coords.latitude, lng: pos.coords.longitude }, dist, geoValid);
+      const id = await startVisit(merchant.id, me.id, { lat, lng }, dist, geoValid);
       navigation.navigate('VisitFlow', { visitId: id });
-    } catch {
-      showDialog('Gagal', 'Tidak dapat mengambil lokasi. Coba lagi.');
+    } catch (e) {
+      if (e instanceof LocationPermissionDeniedError) {
+        showDialog('Izin lokasi diperlukan', 'Aktifkan izin lokasi untuk check-in di merchant.');
+      } else {
+        showDialog('Gagal', 'Tidak dapat mengambil lokasi. Coba lagi.');
+      }
     }
   };
 

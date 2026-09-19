@@ -10,7 +10,6 @@ import {
 import { useNavigation, useRoute } from '@react-navigation/native';
 import * as DocumentPicker from 'expo-document-picker';
 import * as ImagePicker from 'expo-image-picker';
-import * as Location from 'expo-location';
 import { Badge, Btn, Card, Chip, Field, H, Input, Muted, StatusBadge } from '../components/ui';
 import { showDialog } from '../components/dialog';
 import { RESULT_LABEL, RESULT_ORDER, VISIT_VALID_RADIUS_M } from '../config';
@@ -19,6 +18,7 @@ import { useCurrentUser, useStore } from '../store/useStore';
 import { VisitDoc, VisitResult } from '../types';
 import { fmtDurClock, fmtDateTime } from '../utils/format';
 import { haversineM } from '../utils/geo';
+import { LocationPermissionDeniedError, requestCurrentCoords } from '../utils/location';
 import { deleteVisitMedia, extFromUri, uploadVisitMedia } from '../utils/storage';
 
 export default function VisitFlowScreen() {
@@ -47,28 +47,22 @@ export default function VisitFlowScreen() {
   const beginVisit = async () => {
     if (!merchant) return;
     try {
-      const { status } = await Location.requestForegroundPermissionsAsync();
-      if (status !== 'granted') {
-        showDialog('Izin lokasi diperlukan', 'Aktifkan izin lokasi untuk check-in.');
-        return;
-      }
-      const pos = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
+      const { lat, lng } = await requestCurrentCoords();
       let dist: number | null = null;
       let geoValid = true;
       if (merchant.lat != null && merchant.lng != null) {
-        dist = Math.round(
-          haversineM(
-            { lat: merchant.lat, lng: merchant.lng },
-            { lat: pos.coords.latitude, lng: pos.coords.longitude },
-          ),
-        );
+        dist = Math.round(haversineM({ lat: merchant.lat, lng: merchant.lng }, { lat, lng }));
         geoValid = dist <= VISIT_VALID_RADIUS_M;
       }
-      const id = await startVisit(merchant.id, me.id, { lat: pos.coords.latitude, lng: pos.coords.longitude }, dist, geoValid);
+      const id = await startVisit(merchant.id, me.id, { lat, lng }, dist, geoValid);
       // ganti layar agar langsung masuk mode isi data kunjungan
       navigation.replace('VisitFlow', { visitId: id });
-    } catch {
-      showDialog('Gagal', 'Tidak dapat mengambil lokasi. Coba lagi.');
+    } catch (e) {
+      if (e instanceof LocationPermissionDeniedError) {
+        showDialog('Izin lokasi diperlukan', 'Aktifkan izin lokasi untuk check-in.');
+      } else {
+        showDialog('Gagal', 'Tidak dapat mengambil lokasi. Coba lagi.');
+      }
     }
   };
 
@@ -76,24 +70,14 @@ export default function VisitFlowScreen() {
     if (!visit || !merchant || savingLoc) return;
     setSavingLoc(true);
     try {
-      const pos = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
+      const { lat, lng } = await requestCurrentCoords();
       let dist: number | null = null;
       let geoValid = true;
       if (merchant.lat != null && merchant.lng != null) {
-        dist = Math.round(
-          haversineM(
-            { lat: merchant.lat, lng: merchant.lng },
-            { lat: pos.coords.latitude, lng: pos.coords.longitude },
-          ),
-        );
+        dist = Math.round(haversineM({ lat: merchant.lat, lng: merchant.lng }, { lat, lng }));
         geoValid = dist <= VISIT_VALID_RADIUS_M;
       }
-      updateVisit(visit.id, {
-        lat: pos.coords.latitude,
-        lng: pos.coords.longitude,
-        merchantDistanceM: dist,
-        geoValid,
-      });
+      updateVisit(visit.id, { lat, lng, merchantDistanceM: dist, geoValid });
     } catch {
       /* abaikan */
     } finally {
@@ -111,6 +95,9 @@ export default function VisitFlowScreen() {
       );
       const urls = results.filter((r) => r.status === 'fulfilled').map((r) => (r as PromiseFulfilledResult<string>).value);
       const failed = results.length - urls.length;
+      results
+        .filter((r): r is PromiseRejectedResult => r.status === 'rejected')
+        .forEach((r) => console.error('uploadVisitMedia failed:', r.reason));
       if (urls.length) {
         updateVisit(visit.id, { photos: [...visit.photos, ...urls].slice(0, 10) });
       }

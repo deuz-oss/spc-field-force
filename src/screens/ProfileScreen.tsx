@@ -1,5 +1,6 @@
 import React, { useMemo } from 'react';
-import { ScrollView, Text, View } from 'react-native';
+import { Platform, ScrollView, Text, View } from 'react-native';
+import * as IntentLauncher from 'expo-intent-launcher';
 import { Badge, Btn, Card, H, KPICard, Muted, SectionHeader } from '../components/ui';
 import { showDialog } from '../components/dialog';
 import { APP_NAME, ROLE_LABEL } from '../config';
@@ -87,6 +88,26 @@ export default function ProfileScreen() {
           <Muted style={{ marginTop: 10 }}>
             {ROLE_LABEL[me.role]} memantau data operasional secara agregat — bukan mencatat aktivitas lapangan pribadi.
           </Muted>
+        </Card>
+      )}
+
+      {Platform.OS === 'android' && me.role === 'field_agent' && (
+        <Card>
+          <SectionHeader title="Optimasi Baterai" subtitle="Supaya rute tetap terekam saat HP terkunci" />
+          <Muted style={{ marginTop: 6 }}>
+            Sebagian HP (terutama Samsung/Xiaomi) mematikan aplikasi latar belakang otomatis untuk
+            hemat baterai — ini bisa menghentikan pelacakan rute walau sesi absensi masih berjalan.
+            Matikan optimasi baterai untuk aplikasi ini agar rute tetap terekam sampai Anda clock-out.
+          </Muted>
+          <View style={{ marginTop: 10 }}>
+            <Btn
+              variant="outline"
+              title="Buka Pengaturan Baterai"
+              onPress={() =>
+                IntentLauncher.startActivityAsync(IntentLauncher.ActivityAction.IGNORE_BATTERY_OPTIMIZATION_SETTINGS)
+              }
+            />
+          </View>
         </Card>
       )}
 

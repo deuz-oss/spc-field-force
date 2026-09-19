@@ -12,15 +12,25 @@ npx expo start
 ```
 
 - Tekan `w` → buka Web App di browser
-- Tekan `a` → Android (perlu emulator/HP terhubung + Expo Go)
-- Tekan `i` → iOS (perlu Mac/simulator)
+- Tekan `a` / `i` → **hanya untuk fitur tanpa background location.** Live tracking pakai task GPS native (`expo-task-manager`) yang tidak didukung Expo Go — di Android/iOS gunakan custom **dev client** (lihat di bawah), bukan `npx expo start` polos.
 
-Build produksi (APK/IPA/store):
+Butuh `.env` (salin dari `.env.example`) berisi kredensial Supabase — lihat bagian **Backend (Supabase)**.
+
+### Dev client (Android/iOS, wajib untuk background location)
 
 ```bash
-npm i -g eas-cli
-eas build -p android   # atau -p ios
+npx eas-cli login
+npx eas-cli build --platform android --profile development   # atau --platform ios
 ```
+
+Install APK/IPA hasil build ke device/emulator, lalu jalankan bundler dengan:
+
+```bash
+npx expo start --dev-client            # HP di jaringan/USB yang sama
+npx expo start --dev-client --tunnel   # HP di jaringan berbeda (butuh @expo/ngrok)
+```
+
+Build produksi (APK/IPA/store) pakai profile `eas.json` yang sesuai (`eas build -p android --profile production`, dsb — profile produksi belum dikonfigurasi, baru ada `development`).
 
 ## Akun Demo
 
@@ -32,8 +42,7 @@ eas build -p android   # atau -p ios
 | Team Lead | `lead.jaksel` | `lead123` | Data timnya saja: dashboard, merchant, assign agen, impor CSV, laporan |
 | Field Agent (+Incubation) | `agent.budi` | `agent123` | Merchant miliknya, kunjungan/check-in/out, absensi & rute |
 
-Data demo tersimpan lokal (AsyncStorage); reset kapan pun lewat **Profil → Reset Data Demo**.
-Akun Super Admin & Client otomatis tersedia juga pada data lama (migrasi otomatis).
+Data disimpan di **Supabase** (Postgres + Auth + Realtime), bukan lokal — semua akun/tim/merchant di atas berasal dari seed data yang dijalankan sekali via `npm run seed:supabase` (lihat bagian **Backend**). Tombol **Profil → Muat Ulang Data** cuma refetch dari server, bukan reset ke kondisi awal (tidak ada tombol reset destruktif lagi, karena datanya sekarang live/shared).
 
 ## Matriks Hak Akses per Posisi
 
@@ -65,13 +74,13 @@ Catatan Performance KPI (bagian bawah halaman Dashboard) — selaras dengan tabe
 | Impor daftar merchant oleh Team Lead utk di-assign | `ImportScreen.tsx` (CSV + preview + bulk assign ke agent) |
 | Data visit: nama pemilik, kontak merchant, geo pin point, foto lokasi, upload dokumen | `VisitFlowScreen.tsx` |
 | Check-in/check-out di lokasi merchant + durasi di lokasi | `MerchantDetailScreen` → `VisitFlowScreen` (timer live, jarak ke pin merchant, flag geo valid ≤300 m) |
-| Tracking rute selama clock-in s/d clock-out | `AttendanceScreen.tsx` (GPS watch → polyline), peta Leaflet, riwayat + detail rute |
+| Tracking rute selama clock-in s/d clock-out (live, lintas device, termasuk saat app di-background di Android/iOS) | `TrackingWatcher.tsx` + `src/tasks/locationTask.ts` (native background task), realtime via Supabase, peta live `LiveMapScreen.tsx`, riwayat + detail rute + deteksi "titik berhenti" di `AttendanceDetailScreen.tsx` |
 | Option 3: agent merangkap incubation | Milestone kunjungan: pitch → follow-up WA → registered → kualifikasi → upload produk → redemption → cold start complete; status merchant otomatis naik (Cold Start → Registered → Activated) |
 | Estimasi fee Option 3 (base + success fee + insentif cap) | Kartu "Estimasi Fee" di `ReportsScreen.tsx` (rate per tier kota di `src/config.ts`) |
 
 ## Alur Kerja Harian Agent
 
-1. Buka tab **Dashboard** → **CLOCK IN** (absensi) → GPS mulai merekam rute otomatis (berjalan global selama aplikasi terbuka).
+1. Buka tab **Dashboard** → **CLOCK IN** (absensi) → GPS mulai merekam rute otomatis. Di Android/iOS (dev client) tetap merekam walau app di-background/layar terkunci; di Web hanya selama tab terbuka.
 2. Tab Merchant → buka merchant yang di-assign → **CHECK IN** → isi nama pemilik, kontak WA, hasil milestone, foto lokasi (kamera/galeri), upload dokumen, catatan.
 3. **CHECK OUT** → durasi di lokasi tersimpan, status merchant diperbarui.
 4. Kembali ke Dashboard → **CLOCK OUT** → rute selesai; lihat riwayat di tab Absensi & peta di detail absensi.
@@ -87,6 +96,17 @@ Warung Bu Ani,"Jl. Kebon Sirih No.10",081298760001,Ani,F&B,-6.183022,106.826771
 
 Template siap unduh dari layar Impor.
 
+## Backend (Supabase)
+
+Postgres + Auth + Realtime. Schema/RLS/trigger/RPC ada di `supabase/migrations/0001_init.sql`.
+
+1. Buat project di [supabase.com](https://supabase.com), jalankan isi `0001_init.sql` di SQL Editor.
+2. Salin `.env.example` → `.env`, isi `EXPO_PUBLIC_SUPABASE_URL`, `EXPO_PUBLIC_SUPABASE_ANON_KEY`, dan `SUPABASE_SERVICE_ROLE_KEY` (dari Project Settings → API). **Jangan commit `.env`.**
+3. `npm run seed:supabase` — sekali jalan, membuat 8 akun demo + data contoh (reuse `src/store/seed.ts`).
+4. Deploy Edge Function admin (wajib untuk fitur tambah-user/reset-password di layar Pengguna): `npx supabase functions deploy admin-users --project-ref <ref>` (lihat `supabase/functions/admin-users/index.ts`).
+
+Login pakai username biasa di UI, di baliknya di-mapping ke email sintetis `{username}@internal.spc` lalu lewat Supabase Auth (`src/store/useStore.ts`).
+
 ## Design System
 
 Mengacu hasil `ui-ux-pro-max` untuk *enterprise workforce SaaS* (density dashboard, motion subtle):
@@ -101,20 +121,33 @@ Mengacu hasil `ui-ux-pro-max` untuk *enterprise workforce SaaS* (density dashboa
 
 ```
 App.tsx                  # navigasi + gate login + tab per role
+index.ts                 # entry point; registrasi task background location
 src/
-  config.ts              # rate Option 3, radius geo valid, label
-  types.ts               # model domain
-  store/useStore.ts      # state global (zustand) + persistensi
-  store/seed.ts          # data demo (tim Jaksel/Surabaya, agen, merchant, kunjungan)
-  utils/                 # csv, geo (haversine), period, export, format
-  components/            # UI kit, PeriodPicker, LeafletMap (peta via WebView)
-  screens/               # 12 layar aplikasi
+  config.ts              # rate Option 3, radius geo valid, konstanta tracking/stop-detection, label
+  types.ts                # model domain
+  lib/supabase.ts         # klien Supabase (dipakai app)
+  store/useStore.ts       # cache realtime di atas Supabase (zustand) — bukan lagi sumber data lokal
+  store/seed.ts           # data demo; sekarang HANYA dipakai scripts/seed-supabase.ts, bukan runtime app
+  tasks/locationTask.ts   # TaskManager.defineTask — perekaman GPS native, jalan walau app di-background
+  utils/                  # csv, geo (haversine, detectStops), period, export, format
+  components/             # UI kit, PeriodPicker, LeafletMap (peta via WebView), TrackingWatcher
+  screens/                # 14 layar aplikasi (termasuk LiveMapScreen — "Peta Live")
+supabase/
+  migrations/0001_init.sql        # schema + RLS + trigger + RPC finish_visit
+  functions/admin-users/index.ts  # Edge Function: create-user & reset-password (butuh service-role)
+scripts/seed-supabase.ts          # seed 8 akun demo + data contoh ke Supabase
+eas.json                          # profile build EAS (baru ada "development")
 ```
 
 ## Catatan & Pengembangan Lanjutan
 
-- **Penyimpanan lokal** (demo/offline-first): sinkronisasi multi-user memerlukan backend (mis. Supabase/Firebase/REST API) — struktur store sudah memisahkan action agar mudah dialihkan.
-- Tracking rute berjalan saat aplikasi terbuka (foreground). Mode *background location* dapat ditambahkan via `expo-task-manager` + `Location.startLocationUpdatesAsync`.
-- Foto/dokumen disimpan sebagai URI lokal; untuk produksi gunakan object storage.
+Sudah selesai: backend Supabase (Postgres+Auth+Realtime), live tracking lintas device, dwell-time detection ("Titik Berhenti"), background location Android (native task, teruji di device fisik).
+
+Belum/sengaja di luar scope saat ini:
+- **iOS background location** — config `app.json` (`UIBackgroundModes`, izin) sudah disiapkan tapi belum pernah di-build/dites (butuh Mac/Apple device).
+- **Offline write queue** — app sekarang butuh koneksi internet untuk clock-in/out, visit, dan perubahan merchant; koneksi putus saat itu = tulisan itu hilang begitu saja (tidak ada retry/antrian). Ini konsekuensi dari pindah ke Supabase (dulu app ini offline-first via AsyncStorage).
+- **Foto/dokumen visit** masih URI lokal (`file://`), belum disinkronkan ke Supabase Storage — foto yang diambil di satu device belum tentu kelihatan di device lain.
+- **Battery optimization OEM** (terutama Samsung/Xiaomi dkk.) bisa saja tetap mematikan foreground service kalau app di-"tidurkan" manual oleh pengguna di setting baterai — belum ada prompt in-app untuk minta exclude dari optimisasi baterai.
+- **eas.json** baru punya profile `development` (dev client) — belum ada profile `preview`/`production` untuk build siap-rilis, dan build non-dev-client butuh env var Supabase dikonfigurasi lewat EAS (dashboard/`eas env`), bukan cuma `.env` lokal.
 - Peta web memuat tile OpenStreetMap (butuh internet).
-- Kepatuhan geo-fence absensi & validitas visit mengikuti definisi KPI RSP (valid attendance/valid visit).
+- Kepatuhan geo-fence absensi & validitas visit mengikuti definisi KPI RFP (valid attendance/valid visit).

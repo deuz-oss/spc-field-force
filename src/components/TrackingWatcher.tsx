@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { Platform } from 'react-native';
+import { PermissionsAndroid, Platform } from 'react-native';
 import * as Location from 'expo-location';
 import { TRACK_INTERVAL_MS } from '../config';
 import { useCurrentUser, useStore } from '../store/useStore';
@@ -50,6 +50,12 @@ export function TrackingWatcher() {
       }
 
       await Location.requestBackgroundPermissionsAsync();
+      if (cancelled) return;
+      if (Platform.OS === 'android' && Platform.Version >= 33) {
+        // Android 13+ requires this separately, or the foreground-service
+        // notification below silently never shows even though tracking works.
+        await PermissionsAndroid.request(PermissionsAndroid.PERMISSIONS.POST_NOTIFICATIONS);
+      }
       if (cancelled) return;
       await Location.startLocationUpdatesAsync(LOCATION_TASK_NAME, {
         accuracy: Location.Accuracy.Balanced,

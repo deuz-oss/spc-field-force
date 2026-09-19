@@ -18,8 +18,8 @@ import {
 } from '../components/ui';
 import { showDialog } from '../components/dialog';
 import { C, STATUS_COLOR, T } from '../theme';
-import { MONITOR_ROLES, STATUS_LABEL } from '../config';
-import { useCurrentUser, useStore } from '../store/useStore';
+import { STATUS_LABEL } from '../config';
+import { merchantScope, scopeUsers, useCurrentUser, useStore } from '../store/useStore';
 import { Merchant, MerchantStatus, User } from '../types';
 import { fmtDurClock, fmtDurShort, fmtKm, MONTHS_ID } from '../utils/format';
 import { getCurrentCoords } from '../utils/location';
@@ -164,15 +164,7 @@ export default function DashboardScreen() {
 
   const range = useMemo(() => getRange(period, month), [period, month]);
   const scopeIds = useMemo(
-    () =>
-      new Set(
-        (me.role === 'team_lead'
-          ? users.filter((u) => u.active && u.teamId === me.teamId)
-          : me.role === 'field_agent'
-          ? users.filter((u) => u.id === me.id)
-          : users.filter((u) => u.active) // super_admin, admin, client
-        ).map((u) => u.id),
-      ),
+    () => new Set(scopeUsers({ users }, me).map((u) => u.id)),
     [users, me],
   );
 
@@ -191,11 +183,7 @@ export default function DashboardScreen() {
   ).length;
   const validVisitPct = closedVisits.length ? Math.round((100 * validVisitCount) / closedVisits.length) : null;
 
-  const merchantScopeList = MONITOR_ROLES.includes(me.role)
-    ? merchants
-    : me.role === 'team_lead'
-    ? merchants.filter((m) => m.teamId === me.teamId)
-    : merchants.filter((m) => m.assignedTo === me.id);
+  const merchantScopeList = merchantScope({ merchants }, me);
   const newMerchants = merchantScopeList.filter((m) => inRange(m.createdAt, range));
   const byStatus = (st: MerchantStatus) => newMerchants.filter((m) => m.status === st).length;
 

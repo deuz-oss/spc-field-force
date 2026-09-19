@@ -53,4 +53,11 @@ The Chrome window in the initial QA pass could not be resized below ~1280px (`re
 - **Merchant Detail:** map renders correctly (native `WebView` path, unaffected by the web `<iframe>` fix); sticky CHECK IN bar and visit history both correct.
 - **Bug found and fixed via this device pass:** the header's role badge (`ROLE_LABEL[role]`, e.g. "Field Agent (merangkap Incubation Agent)") had no line-wrap guard, so on a real ~360–411dp-wide phone it wrapped to two lines and made the header uneven — invisible on the wide desktop window used for the rest of this QA pass. Fixed in `App.tsx` with `numberOfLines={1}`, `ellipsizeMode="tail"`, and a `maxWidth: 170` cap on the badge container.
 
-Tablet width (700–900dp) remains unverified by screenshot (only mobile <400dp and desktop ≥1280dp were checked); low risk since that range only affects `gridCols`/`contentMaxWidth`, not a structural layout switch.
+## Tablet verification (700–900dp)
+
+Verified by forcing the actual web viewport to 700px, 820px, 899px, and the 900px desktop-threshold transition (an iframe with a fixed CSS width, so `window.innerWidth` — what `useBreakpoint()` reads via `useWindowDimensions` — reflects a genuine narrower viewport rather than the outer Chrome window, which could not be resized below ~1280px). Checked Dashboard, Merchant list, and Reports under Super Admin.
+
+- **700–899px:** bottom tab bar (no rail), header role badge stays on one line, Merchant list stays single-column (`isDesktop`-gated per `MerchantsScreen.tsx`, so this is expected, not a bug), month-chip row in Reports scrolls horizontally as it always has.
+- **900px (desktop threshold):** left rail appears cleanly, no overlap or overlap glitches. The rail claims ~185px, so the Reports month-chip row needs horizontal scrolling sooner than at 899px — an existing scroll pattern, not a new regression.
+
+No breakage found. This closes out the previously-unverified tablet range.

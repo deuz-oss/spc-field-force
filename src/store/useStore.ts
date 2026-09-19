@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import type { RealtimeChannel } from '@supabase/supabase-js';
 import { supabase } from '../lib/supabase';
+import { showDialog } from '../components/dialog';
 import { TRACK_MIN_STEP_M } from '../config';
 import {
   Attendance,
@@ -354,7 +355,10 @@ function scheduleVisitWrite(get: () => StoreState, id: string) {
         .update(visitRow(v))
         .eq('id', id)
         .then(({ error }) => {
-          if (error) console.warn('updateVisit failed:', error.message);
+          if (error) {
+            console.warn('updateVisit failed:', error.message);
+            showDialog('Gagal Menyimpan', 'Perubahan pada kunjungan ini belum tersimpan ke server. Periksa koneksi internet — data yang sudah diketik tetap ada di layar ini.');
+          }
         });
     }, 600),
   );
@@ -517,7 +521,12 @@ export const useStore = create<StoreState>()((set, get) => ({
       source: m.source,
       created_at: new Date(m.createdAt).toISOString(),
     });
-    if (error) console.warn('upsertMerchant failed:', error.message);
+    if (error) {
+      // rollback to the pre-write list — the local cache must not show a
+      // merchant/edit that never actually landed server-side.
+      set({ merchants: list });
+      showDialog('Gagal Menyimpan', 'Tidak dapat menyimpan data merchant ke server. Periksa koneksi internet dan coba lagi.');
+    }
   },
 
   assignMerchants: async (ids, agentId) => {

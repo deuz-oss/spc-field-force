@@ -77,8 +77,12 @@ function ClockCard({ me }: { me: User }) {
             {
               label: 'Clock In sebagai pengecualian',
               destructive: true,
-              onPress: () => {
-                clockInStore(c, false);
+              onPress: async () => {
+                try {
+                  await clockInStore(c, false);
+                } catch {
+                  showDialog('Gagal Clock In', 'Tidak dapat menyimpan absensi ke server. Periksa koneksi internet dan coba lagi.');
+                }
               },
             },
           ],
@@ -86,6 +90,8 @@ function ClockCard({ me }: { me: User }) {
         return;
       }
       await clockInStore(c, ok);
+    } catch {
+      showDialog('Gagal Clock In', 'Tidak dapat menyimpan absensi ke server. Periksa koneksi internet dan coba lagi.');
     } finally {
       setBusy(false);
     }

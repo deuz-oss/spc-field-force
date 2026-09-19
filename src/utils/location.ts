@@ -8,6 +8,7 @@ export interface Coords {
 export class LocationPermissionDeniedError extends Error {}
 
 const HIGH_ACCURACY_TIMEOUT_MS = 12000;
+const FALLBACK_TIMEOUT_MS = 8000;
 
 function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
   return new Promise((resolve, reject) => {
@@ -38,7 +39,10 @@ async function readPosition(): Promise<Location.LocationObject> {
       HIGH_ACCURACY_TIMEOUT_MS,
     );
   } catch {
-    return Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+    return withTimeout(
+      Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced }),
+      FALLBACK_TIMEOUT_MS,
+    );
   }
 }
 

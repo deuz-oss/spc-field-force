@@ -613,13 +613,15 @@ export const useStore = create<StoreState>()((set, get) => ({
       geo_fence_ok: a.geoFenceOk,
     });
     if (error) {
-      console.warn('clockIn failed:', error.message);
-    } else {
-      const { error: rpErr } = await supabase
-        .from('route_points')
-        .insert({ attendance_id: a.id, user_id: userId, lat: pos.lat, lng: pos.lng, recorded_at: new Date(t).toISOString() });
-      if (rpErr) console.warn('clockIn route point failed:', rpErr.message);
+      // rollback optimistic state — a failed insert means the user isn't actually
+      // clocked in server-side, so the local cache must not claim otherwise.
+      set({ attendances: get().attendances.filter((x) => x.id !== a.id) });
+      throw new Error(error.message);
     }
+    const { error: rpErr } = await supabase
+      .from('route_points')
+      .insert({ attendance_id: a.id, user_id: userId, lat: pos.lat, lng: pos.lng, recorded_at: new Date(t).toISOString() });
+    if (rpErr) console.warn('clockIn route point failed:', rpErr.message);
     return a.id;
   },
 

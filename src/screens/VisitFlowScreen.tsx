@@ -18,7 +18,7 @@ import { useCurrentUser, useStore } from '../store/useStore';
 import { VisitDoc, VisitResult } from '../types';
 import { fmtDurClock, fmtDateTime } from '../utils/format';
 import { haversineM } from '../utils/geo';
-import { LocationPermissionDeniedError, requestCurrentCoords } from '../utils/location';
+import { requestCurrentCoords } from '../utils/location';
 import { deleteVisitMedia, extFromUri, uploadVisitMedia } from '../utils/storage';
 
 export default function VisitFlowScreen() {
@@ -28,8 +28,6 @@ export default function VisitFlowScreen() {
   const visitId: string | undefined = route.params?.visitId;
   const visit = useStore((s) => s.visits.find((v) => v.id === visitId));
   const merchants = useStore((s) => s.merchants);
-  const attendances = useStore((s) => s.attendances);
-  const startVisit = useStore((s) => s.startVisit);
   const updateVisit = useStore((s) => s.updateVisit);
   const finishVisit = useStore((s) => s.finishVisit);
 
@@ -43,45 +41,6 @@ export default function VisitFlowScreen() {
     const t = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(t);
   }, [visit && visit.id, visit && visit.checkOutAt]);
-
-  /** mulai kunjungan baru utk merchant di params */
-  const beginVisit = async () => {
-    if (!merchant) return;
-    const activeAttendance = attendances.find((a) => a.userId === me.id && !a.clockOutAt);
-    if (!activeAttendance) {
-      showDialog('Belum Clock-in', 'Clock-in terlebih dahulu di tab Absensi sebelum check-in ke merchant.');
-      return;
-    }
-    let lat: number, lng: number;
-    try {
-      ({ lat, lng } = await requestCurrentCoords());
-    } catch (e) {
-      if (e instanceof LocationPermissionDeniedError) {
-        showDialog('Izin lokasi diperlukan', 'Aktifkan izin lokasi untuk check-in.');
-      } else {
-        showDialog('Gagal', 'Tidak dapat mengambil lokasi. Coba lagi.');
-      }
-      return;
-    }
-    let dist: number | null = null;
-    if (merchant.lat != null && merchant.lng != null) {
-      dist = Math.round(haversineM({ lat: merchant.lat, lng: merchant.lng }, { lat, lng }));
-      if (dist > VISIT_VALID_RADIUS_M) {
-        showDialog(
-          'Di Luar Radius',
-          `Posisi Anda ${dist}m dari pin merchant (maks. ${VISIT_VALID_RADIUS_M}m). Dekati lokasi merchant untuk bisa check-in.`,
-        );
-        return;
-      }
-    }
-    try {
-      const id = await startVisit(merchant.id, me.id, { lat, lng }, dist, true);
-      // ganti layar agar langsung masuk mode isi data kunjungan
-      navigation.replace('VisitFlow', { visitId: id });
-    } catch {
-      showDialog('Gagal Check-in', 'Tidak dapat menyimpan kunjungan ke server. Periksa koneksi internet dan coba lagi.');
-    }
-  };
 
   const refreshPin = async () => {
     if (!visit || !merchant || savingLoc) return;
@@ -216,32 +175,6 @@ export default function VisitFlowScreen() {
       { label: 'Check-out', onPress: doFinish },
     ]);
   };
-
-  // --- tampilan ketika belum ada kunjungan: mulai dari merchant ---
-  if (!visitId) {
-    const m = merchants.find((x) => x.id === route.params?.merchantId);
-    if (me.role !== 'field_agent') {
-      return (
-        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24 }}>
-          <Muted>Hanya Field Agent yang dapat memulai kunjungan.</Muted>
-        </View>
-      );
-    }
-    return (
-      <View style={{ flex: 1 }}>
-        <ScrollView contentContainerStyle={{ padding: 16, gap: 12 }}>
-          <Card>
-            <H>{m ? m.name : 'Merchant'}</H>
-            <Muted style={{ marginTop: 6 }}>
-              Mulai kunjungan dengan menekan tombol CHECK IN di bawah. Lokasi Anda akan dicatat
-              sebagai geo pin point dan durasi di lokasi mulai dihitung.
-            </Muted>
-          </Card>
-          <Btn title="CHECK IN" onPress={beginVisit} />
-        </ScrollView>
-      </View>
-    );
-  }
 
   if (!visit)
     return (

@@ -29,8 +29,9 @@ function LiveSessionCard({ me }: { me: ReturnType<typeof useCurrentUser> }) {
     setBusy(true);
     try {
       const last = active.route[active.route.length - 1] ?? { lat: active.clockInLat, lng: active.clockInLng };
-      await clockOutStore(last);
-      showDialog('Clock Out berhasil');
+      const queued = await clockOutStore(last);
+      // when queued offline, clockOutStore already shows its own "Tersimpan Offline" dialog
+      if (!queued) showDialog('Clock Out berhasil');
     } finally {
       setBusy(false);
     }

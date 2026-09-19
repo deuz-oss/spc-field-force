@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import NetInfo from '@react-native-community/netinfo';
 import type { RealtimeChannel } from '@supabase/supabase-js';
 import { supabase } from '../lib/supabase';
 import { showDialog } from '../components/dialog';
@@ -14,7 +15,13 @@ import {
   VisitResult,
 } from '../types';
 import { haversineM } from '../utils/geo';
+import { loadQueue, saveQueue, QueuedOp } from '../utils/offlineQueue';
 import { uid } from '../utils/uuid';
+
+async function isOnline(): Promise<boolean> {
+  const state = await NetInfo.fetch();
+  return state.isConnected === true;
+}
 
 /** posisi yang tidak terikat tim */
 const TEAMLESS_ROLES: Role[] = ['super_admin', 'admin', 'client'];
@@ -38,9 +45,13 @@ interface StoreState {
   merchants: Merchant[];
   visits: Visit[];
   attendances: Attendance[];
+  /** Clock-in/out and visit check-in/out writes still waiting for connectivity to reach Supabase. */
+  pendingOps: QueuedOp[];
 
   /** Restores an existing Supabase session (if any) on cold app start. Call once from App.tsx. */
   init(): Promise<void>;
+  /** Retries every queued offline write; called on reconnect and on app start. */
+  processPendingOps(): Promise<void>;
   login(username: string, password: string): Promise<string | null>;
   logout(): Promise<void>;
 
@@ -73,7 +84,8 @@ interface StoreState {
   finishVisit(id: string): Promise<void>;
 
   clockIn(pos: { lat: number; lng: number }, geoFenceOk: boolean): Promise<string>;
-  clockOut(pos: { lat: number; lng: number }): Promise<void>;
+  /** Resolves true if the write was queued offline (not yet synced), false once it's actually saved/attempted. */
+  clockOut(pos: { lat: number; lng: number }): Promise<boolean>;
   addRoutePoint(userId: string, p: Omit<RoutePoint, 't'>): void;
 
   /** Re-fetches everything from Supabase for the current session (was a local-seed reset pre-migration). */
@@ -218,10 +230,97 @@ function visitRow(v: Visit) {
   };
 }
 
+/** Re-applies a queued op's optimistic local effect after a cold restart, before it's synced. */
+function applyQueuedOpLocally(set: (p: Partial<StoreState>) => void, get: () => StoreState, op: QueuedOp) {
+  switch (op.type) {
+    case 'clockIn':
+      if (!get().attendances.some((a) => a.id === op.attendance.id)) {
+        set({ attendances: [op.attendance, ...get().attendances] });
+      }
+      break;
+    case 'clockOut':
+      set({
+        attendances: get().attendances.map((a) =>
+          a.id === op.attendanceId ? { ...a, clockOutAt: op.clockOutAt, clockOutLat: op.lat, clockOutLng: op.lng } : a,
+        ),
+      });
+      break;
+    case 'startVisit':
+      if (!get().visits.some((v) => v.id === op.visit.id)) {
+        set({ visits: [op.visit, ...get().visits] });
+      }
+      break;
+    case 'finishVisit': {
+      const v = get().visits.find((x) => x.id === op.visitId);
+      if (v && !v.checkOutAt) {
+        set({
+          visits: get().visits.map((x) => (x.id === op.visitId ? { ...x, checkOutAt: op.checkOutAt } : x)),
+          merchants: get().merchants.map((m) => (m.id === v.merchantId ? applyResult(m, v.result) : m)),
+        });
+      }
+      break;
+    }
+  }
+}
+
+/** Replays one queued op against Supabase. Returns whether it can be dropped from the queue. */
+async function replayOp(get: () => StoreState, op: QueuedOp): Promise<boolean> {
+  if (op.type === 'clockIn') {
+    const a = op.attendance;
+    const { error } = await supabase.from('attendances').insert({
+      id: a.id,
+      user_id: a.userId,
+      clock_in_at: new Date(a.clockInAt).toISOString(),
+      clock_in_lat: a.clockInLat,
+      clock_in_lng: a.clockInLng,
+      clock_out_at: null,
+      geo_fence_ok: a.geoFenceOk,
+    });
+    return !error;
+  }
+  if (op.type === 'clockOut') {
+    const { error } = await supabase
+      .from('attendances')
+      .update({
+        clock_out_at: new Date(op.clockOutAt).toISOString(),
+        clock_out_lat: op.lat,
+        clock_out_lng: op.lng,
+      })
+      .eq('id', op.attendanceId);
+    return !error;
+  }
+  if (op.type === 'startVisit') {
+    const v = op.visit;
+    const { error } = await supabase.from('visits').insert({
+      id: v.id,
+      merchant_id: v.merchantId,
+      agent_id: v.agentId,
+      check_in_at: new Date(v.checkInAt).toISOString(),
+      check_out_at: null,
+      ...visitRow(v),
+    });
+    return !error;
+  }
+  // finishVisit
+  const v = get().visits.find((x) => x.id === op.visitId);
+  if (!v) return true; // visit no longer known locally — nothing left to sync
+  const { error: syncErr } = await supabase.from('visits').update(visitRow(v)).eq('id', op.visitId);
+  if (syncErr) return false;
+  const { error } = await supabase.rpc('finish_visit', { p_visit_id: op.visitId });
+  return !error;
+}
+
+async function enqueueOp(set: (p: Partial<StoreState>) => void, get: () => StoreState, op: QueuedOp) {
+  const next = [...get().pendingOps, op];
+  set({ pendingOps: next });
+  await saveQueue(next);
+}
+
 // --- module-scope (non-reactive) helpers: realtime channel + debounce ------
 
 let channel: RealtimeChannel | null = null;
 let authListenerBound = false;
+let netInfoListenerBound = false;
 
 function teardownRealtime() {
   if (channel) {
@@ -380,6 +479,7 @@ export const useStore = create<StoreState>()((set, get) => ({
   merchants: [],
   visits: [],
   attendances: [],
+  pendingOps: [],
 
   init: async () => {
     const {
@@ -388,6 +488,14 @@ export const useStore = create<StoreState>()((set, get) => ({
     if (session?.user) {
       const ok = await hydrateAll(set, get, session.user.id);
       if (!ok) await supabase.auth.signOut();
+      else {
+        // queued writes from a previous offline session don't exist server-side yet —
+        // re-apply their optimistic effect so the UI still reflects them after a restart.
+        const queue = await loadQueue();
+        for (const op of queue) applyQueuedOpLocally(set, get, op);
+        set({ pendingOps: queue });
+        if (queue.length) get().processPendingOps();
+      }
     }
     set({ ready: true });
 
@@ -399,6 +507,27 @@ export const useStore = create<StoreState>()((set, get) => ({
           set({ sessionUserId: null, users: [], teams: [], merchants: [], visits: [], attendances: [] });
         }
       });
+    }
+    if (!netInfoListenerBound) {
+      netInfoListenerBound = true;
+      NetInfo.addEventListener((state) => {
+        if (state.isConnected && get().pendingOps.length) get().processPendingOps();
+      });
+    }
+  },
+
+  processPendingOps: async () => {
+    const queue = get().pendingOps;
+    if (!queue.length) return;
+    const remaining: QueuedOp[] = [];
+    for (const op of queue) {
+      const done = await replayOp(get, op);
+      if (!done) remaining.push(op);
+    }
+    set({ pendingOps: remaining });
+    await saveQueue(remaining);
+    if (remaining.length < queue.length && !remaining.length) {
+      showDialog('Tersinkron', 'Data yang tersimpan offline berhasil dikirim ke server.');
     }
   },
 
@@ -565,6 +694,13 @@ export const useStore = create<StoreState>()((set, get) => ({
       docs: [],
     };
     set({ visits: [v, ...get().visits] });
+
+    if (!(await isOnline())) {
+      await enqueueOp(set, get, { id: uid('op_'), type: 'startVisit', visit: v });
+      showDialog('Tersimpan Offline', 'Kunjungan tersimpan di HP dan akan otomatis disinkron saat koneksi kembali.');
+      return v.id;
+    }
+
     const { error } = await supabase.from('visits').insert({
       id: v.id,
       merchant_id: v.merchantId,
@@ -590,10 +726,18 @@ export const useStore = create<StoreState>()((set, get) => ({
     const v = s.visits.find((x) => x.id === id);
     if (!v) return;
     flushVisitWrite(id);
+    const checkOutAt = Date.now();
     set({
-      visits: s.visits.map((x) => (x.id === id ? { ...x, checkOutAt: Date.now() } : x)),
+      visits: s.visits.map((x) => (x.id === id ? { ...x, checkOutAt } : x)),
       merchants: s.merchants.map((m) => (m.id === v.merchantId ? applyResult(m, v.result) : m)),
     });
+
+    if (!(await isOnline())) {
+      await enqueueOp(set, get, { id: uid('op_'), type: 'finishVisit', visitId: id, checkOutAt });
+      showDialog('Tersimpan Offline', 'Check-out tersimpan di HP dan akan otomatis disinkron saat koneksi kembali.');
+      return;
+    }
+
     // make sure the latest (possibly just-typed) field edits land before the record locks
     const { error: syncErr } = await supabase.from('visits').update(visitRow(v)).eq('id', id);
     if (syncErr) console.warn('finishVisit field sync failed:', syncErr.message);
@@ -615,6 +759,13 @@ export const useStore = create<StoreState>()((set, get) => ({
       geoFenceOk,
     };
     set({ attendances: [a, ...get().attendances] });
+
+    if (!(await isOnline())) {
+      await enqueueOp(set, get, { id: uid('op_'), type: 'clockIn', attendance: a });
+      showDialog('Tersimpan Offline', 'Clock-in tersimpan di HP dan akan otomatis disinkron saat koneksi kembali.');
+      return a.id;
+    }
+
     const { error } = await supabase.from('attendances').insert({
       id: a.id,
       user_id: a.userId,
@@ -640,7 +791,7 @@ export const useStore = create<StoreState>()((set, get) => ({
   clockOut: async (pos) => {
     const userId = get().sessionUserId!;
     const a = get().attendances.find((x) => x.userId === userId && !x.clockOutAt);
-    if (!a) return;
+    if (!a) return false;
     const t = Date.now();
     const shouldAddPoint = haversineM(a.route[a.route.length - 1] ?? a, pos) > TRACK_MIN_STEP_M;
     set({
@@ -656,6 +807,13 @@ export const useStore = create<StoreState>()((set, get) => ({
           : x,
       ),
     });
+
+    if (!(await isOnline())) {
+      await enqueueOp(set, get, { id: uid('op_'), type: 'clockOut', attendanceId: a.id, clockOutAt: t, lat: pos.lat, lng: pos.lng });
+      showDialog('Tersimpan Offline', 'Clock-out tersimpan di HP dan akan otomatis disinkron saat koneksi kembali.');
+      return true;
+    }
+
     const { error } = await supabase
       .from('attendances')
       .update({ clock_out_at: new Date(t).toISOString(), clock_out_lat: pos.lat, clock_out_lng: pos.lng })
@@ -667,6 +825,7 @@ export const useStore = create<StoreState>()((set, get) => ({
         .insert({ attendance_id: a.id, user_id: userId, lat: pos.lat, lng: pos.lng, recorded_at: new Date(t).toISOString() });
       if (rpErr) console.warn('clockOut route point failed:', rpErr.message);
     }
+    return false;
   },
 
   addRoutePoint: (userId, p) => {
@@ -690,6 +849,9 @@ export const useStore = create<StoreState>()((set, get) => ({
     const userId = get().sessionUserId;
     if (!userId) return;
     await hydrateAll(set, get, userId);
+    // hydrateAll only knows what the server has — anything still queued offline
+    // hasn't landed there yet, so re-apply it or it'll vanish from the UI.
+    for (const op of get().pendingOps) applyQueuedOpLocally(set, get, op);
   },
 }));
 

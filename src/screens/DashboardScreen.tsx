@@ -101,7 +101,7 @@ function ClockCard({ me }: { me: User }) {
     setBusy(true);
     try {
       const c = await getCurrentCoords();
-      await clockOutStore(
+      const queued = await clockOutStore(
         c ??
           (active
             ? active.route[active.route.length - 1] ?? {
@@ -110,7 +110,8 @@ function ClockCard({ me }: { me: User }) {
               }
             : { lat: 0, lng: 0 }),
       );
-      showDialog('Clock Out berhasil');
+      // when queued offline, clockOutStore already shows its own "Tersimpan Offline" dialog
+      if (!queued) showDialog('Clock Out berhasil');
     } finally {
       setBusy(false);
     }

@@ -15,7 +15,9 @@
         "NSLocationAlwaysAndWhenInUseUsageDescription": "Aplikasi memerlukan lokasi untuk check-in merchant, absensi, dan pelacakan rute.",
         "NSCameraUsageDescription": "Kamera digunakan untuk foto lokasi merchant.",
         "NSPhotoLibraryUsageDescription": "Galeri digunakan untuk melampirkan foto lokasi merchant.",
-        "UIBackgroundModes": ["location"]
+        "UIBackgroundModes": [
+          "location"
+        ]
       }
     },
     "android": {
@@ -27,12 +29,14 @@
         "monochromeImage": "./assets/android-icon-monochrome.png"
       },
       "permissions": [
-        "ACCESS_COARSE_LOCATION",
-        "ACCESS_FINE_LOCATION",
-        "ACCESS_BACKGROUND_LOCATION",
-        "FOREGROUND_SERVICE",
-        "FOREGROUND_SERVICE_LOCATION",
-        "CAMERA"
+        "android.permission.ACCESS_COARSE_LOCATION",
+        "android.permission.ACCESS_FINE_LOCATION",
+        "android.permission.ACCESS_BACKGROUND_LOCATION",
+        "android.permission.FOREGROUND_SERVICE",
+        "android.permission.FOREGROUND_SERVICE_LOCATION",
+        "android.permission.RECEIVE_BOOT_COMPLETED",
+        "android.permission.CAMERA",
+        "android.permission.RECORD_AUDIO"
       ],
       "predictiveBackGestureEnabled": false
     },
@@ -57,6 +61,12 @@
           "photosPermission": "Galeri digunakan untuk melampirkan foto lokasi merchant."
         }
       ]
-    ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "686895ce-3808-421a-93c1-eb6fd7ac39a2"
+      }
+    },
+    "owner": "deuz-oss"
   }
 }

@@ -47,6 +47,9 @@
     "android": "expo start --android",
     "ios": "expo start --ios",
     "web": "expo start --web",
-    "seed:supabase": "tsx scripts/seed-supabase.ts"
+    "seed:supabase": "tsx scripts/seed-supabase.ts",
+    "build:dev": "eas build --profile development --platform android",
+    "build:preview": "eas build --profile preview --platform android",
+    "build:production": "eas build --profile production --platform android"
   }
 }

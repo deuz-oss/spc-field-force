@@ -30,6 +30,9 @@ yarn-error.*
 .DS_Store
 *.pem
 
+# editor workspace config (local, per-contributor)
+*.code-workspace
+
 # local env files
 .env
 .env*.local

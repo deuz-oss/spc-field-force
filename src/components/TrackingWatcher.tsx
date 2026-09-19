@@ -1,11 +1,20 @@
-import React, { useEffect } from 'react';
+import { useEffect } from 'react';
+import { Platform } from 'react-native';
 import * as Location from 'expo-location';
 import { TRACK_INTERVAL_MS } from '../config';
 import { useCurrentUser, useStore } from '../store/useStore';
+import { LOCATION_TASK_NAME } from '../tasks/locationTask';
 
 /**
- * Dipasang sekali di root: merekam rute GPS selama ada sesi absensi aktif,
- * tidak peduli layar mana yang sedang dibuka.
+ * Dipasang sekali di root: start/stop perekaman GPS selama ada sesi absensi
+ * aktif, tidak peduli layar mana yang sedang dibuka.
+ *
+ * Native (Android/iOS): pakai task background (src/tasks/locationTask.ts)
+ * lewat startLocationUpdatesAsync, jadi tetap merekam walau app di-background.
+ * Web: expo-location TIDAK mengekspos startLocationUpdatesAsync/
+ * stopLocationUpdatesAsync/hasStartedLocationUpdatesAsync di platform web sama
+ * sekali (akan throw kalau dipanggil) — jadi web tetap pakai watchPositionAsync
+ * foreground-only seperti sebelumnya.
  */
 export function TrackingWatcher() {
   const me = useCurrentUser();
@@ -16,25 +25,43 @@ export function TrackingWatcher() {
   const addRoutePoint = useStore((s) => s.addRoutePoint);
 
   useEffect(() => {
-    if (!me || !activeId) return;
+    if (!me || !activeId) {
+      if (Platform.OS !== 'web') {
+        Location.hasStartedLocationUpdatesAsync(LOCATION_TASK_NAME).then((started) => {
+          if (started) Location.stopLocationUpdatesAsync(LOCATION_TASK_NAME);
+        });
+      }
+      return;
+    }
+
     let cancelled = false;
     let sub: Location.LocationSubscription | null = null;
+
     (async () => {
-      const { status } = await Location.requestForegroundPermissionsAsync();
-      if (status !== 'granted' || cancelled) return;
-      sub = await Location.watchPositionAsync(
-        {
-          accuracy: Location.Accuracy.Balanced,
-          timeInterval: TRACK_INTERVAL_MS,
-          distanceInterval: 10,
+      const fg = await Location.requestForegroundPermissionsAsync();
+      if (fg.status !== 'granted' || cancelled) return;
+
+      if (Platform.OS === 'web') {
+        sub = await Location.watchPositionAsync(
+          { accuracy: Location.Accuracy.Balanced, timeInterval: TRACK_INTERVAL_MS, distanceInterval: 10 },
+          (pos) => addRoutePoint(me.id, { lat: pos.coords.latitude, lng: pos.coords.longitude }),
+        );
+        return;
+      }
+
+      await Location.requestBackgroundPermissionsAsync();
+      if (cancelled) return;
+      await Location.startLocationUpdatesAsync(LOCATION_TASK_NAME, {
+        accuracy: Location.Accuracy.Balanced,
+        timeInterval: TRACK_INTERVAL_MS,
+        distanceInterval: 10,
+        foregroundService: {
+          notificationTitle: 'SPC Field Force',
+          notificationBody: 'Merekam rute perjalanan selama sesi absensi aktif.',
         },
-        (pos) =>
-          addRoutePoint(me.id, {
-            lat: pos.coords.latitude,
-            lng: pos.coords.longitude,
-          }),
-      );
+      });
     })();
+
     return () => {
       cancelled = true;
       sub?.remove();

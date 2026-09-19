@@ -14,7 +14,8 @@
         "NSLocationWhenInUseUsageDescription": "Aplikasi memerlukan lokasi untuk check-in merchant, absensi, dan pelacakan rute.",
         "NSLocationAlwaysAndWhenInUseUsageDescription": "Aplikasi memerlukan lokasi untuk check-in merchant, absensi, dan pelacakan rute.",
         "NSCameraUsageDescription": "Kamera digunakan untuk foto lokasi merchant.",
-        "NSPhotoLibraryUsageDescription": "Galeri digunakan untuk melampirkan foto lokasi merchant."
+        "NSPhotoLibraryUsageDescription": "Galeri digunakan untuk melampirkan foto lokasi merchant.",
+        "UIBackgroundModes": ["location"]
       }
     },
     "android": {
@@ -28,6 +29,9 @@
       "permissions": [
         "ACCESS_COARSE_LOCATION",
         "ACCESS_FINE_LOCATION",
+        "ACCESS_BACKGROUND_LOCATION",
+        "FOREGROUND_SERVICE",
+        "FOREGROUND_SERVICE_LOCATION",
         "CAMERA"
       ],
       "predictiveBackGestureEnabled": false
@@ -41,7 +45,9 @@
         "expo-location",
         {
           "locationWhenInUsePermission": "Aplikasi memerlukan lokasi untuk check-in merchant, absensi, dan pelacakan rute.",
-          "locationAlwaysAndWhenInUsePermission": "Aplikasi memerlukan lokasi untuk check-in merchant, absensi, dan pelacakan rute."
+          "locationAlwaysAndWhenInUsePermission": "Aplikasi memerlukan lokasi untuk check-in merchant, absensi, dan pelacakan rute.",
+          "isAndroidBackgroundLocationEnabled": true,
+          "isIosBackgroundLocationEnabled": true
         }
       ],
       [

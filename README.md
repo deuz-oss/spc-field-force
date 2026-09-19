@@ -98,9 +98,9 @@ Template siap unduh dari layar Impor.
 
 ## Backend (Supabase)
 
-Postgres + Auth + Realtime. Schema/RLS/trigger/RPC ada di `supabase/migrations/0001_init.sql`.
+Postgres + Auth + Realtime + Storage. Migration ada di `supabase/migrations/` (`0001_init.sql` = schema/RLS/trigger/RPC, `0002_visit_media_storage.sql` = bucket foto/dokumen visit).
 
-1. Buat project di [supabase.com](https://supabase.com), jalankan isi `0001_init.sql` di SQL Editor.
+1. Buat project di [supabase.com](https://supabase.com), jalankan isi `0001_init.sql` lalu `0002_visit_media_storage.sql` di SQL Editor (berurutan).
 2. Salin `.env.example` → `.env`, isi `EXPO_PUBLIC_SUPABASE_URL`, `EXPO_PUBLIC_SUPABASE_ANON_KEY`, dan `SUPABASE_SERVICE_ROLE_KEY` (dari Project Settings → API). **Jangan commit `.env`.**
 3. `npm run seed:supabase` — sekali jalan, membuat 8 akun demo + data contoh (reuse `src/store/seed.ts`).
 4. Deploy Edge Function admin (wajib untuk fitur tambah-user/reset-password di layar Pengguna): `npx supabase functions deploy admin-users --project-ref <ref>` (lihat `supabase/functions/admin-users/index.ts`).
@@ -141,12 +141,11 @@ eas.json                          # profile build EAS (baru ada "development")
 
 ## Catatan & Pengembangan Lanjutan
 
-Sudah selesai: backend Supabase (Postgres+Auth+Realtime), live tracking lintas device, dwell-time detection ("Titik Berhenti"), background location Android (native task, teruji di device fisik).
+Sudah selesai: backend Supabase (Postgres+Auth+Realtime), live tracking lintas device, dwell-time detection ("Titik Berhenti"), background location Android (native task, teruji di device fisik), foto/dokumen visit tersimpan di Supabase Storage (bucket `visit-media`, lihat `supabase/migrations/0002_visit_media_storage.sql`).
 
 Belum/sengaja di luar scope saat ini:
 - **iOS background location** — config `app.json` (`UIBackgroundModes`, izin) sudah disiapkan tapi belum pernah di-build/dites (butuh Mac/Apple device).
 - **Offline write queue** — app sekarang butuh koneksi internet untuk clock-in/out, visit, dan perubahan merchant; koneksi putus saat itu = tulisan itu hilang begitu saja (tidak ada retry/antrian). Ini konsekuensi dari pindah ke Supabase (dulu app ini offline-first via AsyncStorage).
-- **Foto/dokumen visit** masih URI lokal (`file://`), belum disinkronkan ke Supabase Storage — foto yang diambil di satu device belum tentu kelihatan di device lain.
 - **Battery optimization OEM** (terutama Samsung/Xiaomi dkk.) bisa saja tetap mematikan foreground service kalau app di-"tidurkan" manual oleh pengguna di setting baterai — belum ada prompt in-app untuk minta exclude dari optimisasi baterai.
 - **eas.json** baru punya profile `development` (dev client) — belum ada profile `preview`/`production` untuk build siap-rilis, dan build non-dev-client butuh env var Supabase dikonfigurasi lewat EAS (dashboard/`eas env`), bukan cuma `.env` lokal.
 - Peta web memuat tile OpenStreetMap (butuh internet).

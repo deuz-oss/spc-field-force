@@ -73,7 +73,7 @@ Catatan Performance KPI (bagian bawah halaman Dashboard) — selaras dengan tabe
 | Laporan ekspor: Absensi, Merchant Registered/Activated/Cold Start | `ReportsScreen.tsx` → CSV via share sheet (mobile) / unduhan (web), plus ekspor Kunjungan |
 | Impor daftar merchant oleh Team Lead utk di-assign | `ImportScreen.tsx` (CSV + preview + bulk assign ke agent) |
 | Data visit: nama pemilik, kontak merchant, geo pin point, foto lokasi, upload dokumen | `VisitFlowScreen.tsx` |
-| Check-in/check-out di lokasi merchant + durasi di lokasi | `MerchantDetailScreen` → `VisitFlowScreen` (timer live, jarak ke pin merchant, flag geo valid ≤300 m) |
+| Check-in/check-out di lokasi merchant + durasi di lokasi | `MerchantDetailScreen` → `VisitFlowScreen` (timer live, jarak ke pin merchant). Check-in **diblokir** (bukan cuma ditandai) kalau agent belum clock-in aktif atau berada di luar radius 300 m dari pin merchant. |
 | Tracking rute selama clock-in s/d clock-out (live, lintas device, termasuk saat app di-background di Android/iOS) | `TrackingWatcher.tsx` + `src/tasks/locationTask.ts` (native background task), realtime via Supabase, peta live `LiveMapScreen.tsx`, riwayat + detail rute + deteksi "titik berhenti" di `AttendanceDetailScreen.tsx` |
 | Option 3: agent merangkap incubation | Milestone kunjungan: pitch → follow-up WA → registered → kualifikasi → upload produk → redemption → cold start complete; status merchant otomatis naik (Cold Start → Registered → Activated) |
 | Estimasi fee Option 3 (base + success fee + insentif cap) | Kartu "Estimasi Fee" di `ReportsScreen.tsx` (rate per tier kota di `src/config.ts`) |
@@ -141,11 +141,11 @@ eas.json                          # profile build EAS (baru ada "development")
 
 ## Catatan & Pengembangan Lanjutan
 
-Sudah selesai: backend Supabase (Postgres+Auth+Realtime), live tracking lintas device, dwell-time detection ("Titik Berhenti"), background location Android (native task, teruji di device fisik), foto/dokumen visit tersimpan di Supabase Storage (bucket `visit-media`, lihat `supabase/migrations/0002_visit_media_storage.sql`).
+Sudah selesai: backend Supabase (Postgres+Auth+Realtime), live tracking lintas device, dwell-time detection ("Titik Berhenti"), background location Android (native task, teruji di device fisik), foto/dokumen visit tersimpan di Supabase Storage (bucket `visit-media`, lihat `supabase/migrations/0002_visit_media_storage.sql`), pengambilan GPS yang tahan gangguan (timeout + fallback akurasi bertingkat di `src/utils/location.ts`), check-in visit yang mewajibkan clock-in aktif dan radius ≤300 m (`MerchantDetailScreen.tsx`/`VisitFlowScreen.tsx`).
 
 Belum/sengaja di luar scope saat ini:
 - **iOS background location** — config `app.json` (`UIBackgroundModes`, izin) sudah disiapkan tapi belum pernah di-build/dites (butuh Mac/Apple device).
-- **Offline write queue** — app sekarang butuh koneksi internet untuk clock-in/out, visit, dan perubahan merchant; koneksi putus saat itu = tulisan itu hilang begitu saja (tidak ada retry/antrian). Ini konsekuensi dari pindah ke Supabase (dulu app ini offline-first via AsyncStorage).
+- **Offline write queue** — app sekarang butuh koneksi internet untuk clock-in/out, visit, dan perubahan merchant; koneksi putus saat itu = tulisan itu hilang begitu saja (tidak ada retry/antrian). Ini konsekuensi dari pindah ke Supabase (dulu app ini offline-first via AsyncStorage). `clockIn` sudah di-rollback + menampilkan dialog error kalau gagal tersimpan; `startVisit` dan tulisan lain (mis. update merchant/visit) masih gagal diam-diam (`console.warn` saja) — belum konsisten.
 - **Battery optimization OEM** (terutama Samsung/Xiaomi dkk.) bisa saja tetap mematikan foreground service kalau app di-"tidurkan" manual oleh pengguna di setting baterai — belum ada prompt in-app untuk minta exclude dari optimisasi baterai.
 - **eas.json** baru punya profile `development` (dev client) — belum ada profile `preview`/`production` untuk build siap-rilis, dan build non-dev-client butuh env var Supabase dikonfigurasi lewat EAS (dashboard/`eas env`), bukan cuma `.env` lokal.
 - Peta web memuat tile OpenStreetMap (butuh internet).

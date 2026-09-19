@@ -57,27 +57,33 @@ export default function MerchantDetailScreen() {
       showDialog('Belum Clock-in', 'Clock-in terlebih dahulu di tab Absensi sebelum check-in ke merchant.');
       return;
     }
+    let lat: number, lng: number;
     try {
-      const { lat, lng } = await requestCurrentCoords();
-      let dist: number | null = null;
-      if (merchant.lat != null && merchant.lng != null) {
-        dist = Math.round(haversineM({ lat: merchant.lat, lng: merchant.lng }, { lat, lng }));
-        if (dist > VISIT_VALID_RADIUS_M) {
-          showDialog(
-            'Di Luar Radius',
-            `Posisi Anda ${dist}m dari pin merchant (maks. ${VISIT_VALID_RADIUS_M}m). Dekati lokasi merchant untuk bisa check-in.`,
-          );
-          return;
-        }
-      }
-      const id = await startVisit(merchant.id, me.id, { lat, lng }, dist, true);
-      navigation.navigate('VisitFlow', { visitId: id });
+      ({ lat, lng } = await requestCurrentCoords());
     } catch (e) {
       if (e instanceof LocationPermissionDeniedError) {
         showDialog('Izin lokasi diperlukan', 'Aktifkan izin lokasi untuk check-in di merchant.');
       } else {
         showDialog('Gagal', 'Tidak dapat mengambil lokasi. Coba lagi.');
       }
+      return;
+    }
+    let dist: number | null = null;
+    if (merchant.lat != null && merchant.lng != null) {
+      dist = Math.round(haversineM({ lat: merchant.lat, lng: merchant.lng }, { lat, lng }));
+      if (dist > VISIT_VALID_RADIUS_M) {
+        showDialog(
+          'Di Luar Radius',
+          `Posisi Anda ${dist}m dari pin merchant (maks. ${VISIT_VALID_RADIUS_M}m). Dekati lokasi merchant untuk bisa check-in.`,
+        );
+        return;
+      }
+    }
+    try {
+      const id = await startVisit(merchant.id, me.id, { lat, lng }, dist, true);
+      navigation.navigate('VisitFlow', { visitId: id });
+    } catch {
+      showDialog('Gagal Check-in', 'Tidak dapat menyimpan kunjungan ke server. Periksa koneksi internet dan coba lagi.');
     }
   };
 

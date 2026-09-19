@@ -564,7 +564,10 @@ export const useStore = create<StoreState>()((set, get) => ({
       check_out_at: null,
       ...visitRow(v),
     });
-    if (error) console.warn('startVisit failed:', error.message);
+    if (error) {
+      set({ visits: get().visits.filter((x) => x.id !== v.id) });
+      throw new Error(error.message);
+    }
     return v.id;
   },
 

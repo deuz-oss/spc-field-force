@@ -28,6 +28,7 @@ export default function VisitFlowScreen() {
   const visitId: string | undefined = route.params?.visitId;
   const visit = useStore((s) => s.visits.find((v) => v.id === visitId));
   const merchants = useStore((s) => s.merchants);
+  const attendances = useStore((s) => s.attendances);
   const startVisit = useStore((s) => s.startVisit);
   const updateVisit = useStore((s) => s.updateVisit);
   const finishVisit = useStore((s) => s.finishVisit);
@@ -46,15 +47,25 @@ export default function VisitFlowScreen() {
   /** mulai kunjungan baru utk merchant di params */
   const beginVisit = async () => {
     if (!merchant) return;
+    const activeAttendance = attendances.find((a) => a.userId === me.id && !a.clockOutAt);
+    if (!activeAttendance) {
+      showDialog('Belum Clock-in', 'Clock-in terlebih dahulu di tab Absensi sebelum check-in ke merchant.');
+      return;
+    }
     try {
       const { lat, lng } = await requestCurrentCoords();
       let dist: number | null = null;
-      let geoValid = true;
       if (merchant.lat != null && merchant.lng != null) {
         dist = Math.round(haversineM({ lat: merchant.lat, lng: merchant.lng }, { lat, lng }));
-        geoValid = dist <= VISIT_VALID_RADIUS_M;
+        if (dist > VISIT_VALID_RADIUS_M) {
+          showDialog(
+            'Di Luar Radius',
+            `Posisi Anda ${dist}m dari pin merchant (maks. ${VISIT_VALID_RADIUS_M}m). Dekati lokasi merchant untuk bisa check-in.`,
+          );
+          return;
+        }
       }
-      const id = await startVisit(merchant.id, me.id, { lat, lng }, dist, geoValid);
+      const id = await startVisit(merchant.id, me.id, { lat, lng }, dist, true);
       // ganti layar agar langsung masuk mode isi data kunjungan
       navigation.replace('VisitFlow', { visitId: id });
     } catch (e) {

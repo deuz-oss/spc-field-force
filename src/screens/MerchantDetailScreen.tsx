@@ -20,6 +20,7 @@ export default function MerchantDetailScreen() {
   const users = useStore((s) => s.users);
   const teams = useStore((s) => s.teams);
   const visits = useStore((s) => s.visits);
+  const attendances = useStore((s) => s.attendances);
   const upsertMerchant = useStore((s) => s.upsertMerchant);
   const startVisit = useStore((s) => s.startVisit);
 
@@ -51,15 +52,25 @@ export default function MerchantDetailScreen() {
       navigation.navigate('VisitFlow', { visitId: openVisit.id });
       return;
     }
+    const activeAttendance = attendances.find((a) => a.userId === me.id && !a.clockOutAt);
+    if (!activeAttendance) {
+      showDialog('Belum Clock-in', 'Clock-in terlebih dahulu di tab Absensi sebelum check-in ke merchant.');
+      return;
+    }
     try {
       const { lat, lng } = await requestCurrentCoords();
       let dist: number | null = null;
-      let geoValid = true;
       if (merchant.lat != null && merchant.lng != null) {
         dist = Math.round(haversineM({ lat: merchant.lat, lng: merchant.lng }, { lat, lng }));
-        geoValid = dist <= VISIT_VALID_RADIUS_M;
+        if (dist > VISIT_VALID_RADIUS_M) {
+          showDialog(
+            'Di Luar Radius',
+            `Posisi Anda ${dist}m dari pin merchant (maks. ${VISIT_VALID_RADIUS_M}m). Dekati lokasi merchant untuk bisa check-in.`,
+          );
+          return;
+        }
       }
-      const id = await startVisit(merchant.id, me.id, { lat, lng }, dist, geoValid);
+      const id = await startVisit(merchant.id, me.id, { lat, lng }, dist, true);
       navigation.navigate('VisitFlow', { visitId: id });
     } catch (e) {
       if (e instanceof LocationPermissionDeniedError) {

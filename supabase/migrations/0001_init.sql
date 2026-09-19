@@ -136,12 +136,16 @@ alter table public.profiles enable row level security;
 create policy profiles_select on public.profiles for select
 using (
   id = auth.uid()
-  or ( active and (
-       public.current_role() in ('super_admin','admin','client')
-       or (public.current_role() = 'team_lead' and team_id = public.current_team_id())
-  ))
+  or public.current_role() in ('super_admin','admin','client')
+  or (public.current_role() = 'team_lead' and active and team_id = public.current_team_id())
 );
 -- field_agent: neither branch fires beyond "id = auth.uid()" -> self only. Matches scopeUsers() exactly.
+-- super_admin/admin/client must see inactive profiles too, not just active ones: Postgres RLS
+-- for UPDATE...RETURNING (which PostgREST always uses under the hood) requires the SELECT
+-- policy to hold for the resulting row, not just the UPDATE policy's own WITH CHECK. Gating
+-- this branch on `active` meant toggleUserActive() could never work at all: deactivating a
+-- user made the RETURNING row invisible (explicit RLS error), and reactivating one failed
+-- silently because the already-inactive row wasn't targetable in the first place.
 
 create policy profiles_write_super_admin on public.profiles for update
 using (public.current_role() = 'super_admin')

@@ -739,6 +739,8 @@ export const useStore = create<StoreState>()((set, get) => ({
     if (!v) return;
     flushVisitWrite(id);
     const checkOutAt = Date.now();
+    const beforeVisits = s.visits;
+    const beforeMerchants = s.merchants;
     set({
       visits: s.visits.map((x) => (x.id === id ? { ...x, checkOutAt } : x)),
       merchants: s.merchants.map((m) => (m.id === v.merchantId ? applyResult(m, v.result) : m)),
@@ -752,9 +754,15 @@ export const useStore = create<StoreState>()((set, get) => ({
 
     // make sure the latest (possibly just-typed) field edits land before the record locks
     const { error: syncErr } = await supabase.from('visits').update(visitRow(v)).eq('id', id);
-    if (syncErr) console.warn('finishVisit field sync failed:', syncErr.message);
+    if (syncErr) {
+      set({ visits: beforeVisits, merchants: beforeMerchants });
+      throw new Error(syncErr.message);
+    }
     const { error } = await supabase.rpc('finish_visit', { p_visit_id: id });
-    if (error) console.warn('finish_visit RPC failed:', error.message);
+    if (error) {
+      set({ visits: beforeVisits, merchants: beforeMerchants });
+      throw new Error(error.message);
+    }
   },
 
   clockIn: async (pos, geoFenceOk) => {
@@ -806,8 +814,9 @@ export const useStore = create<StoreState>()((set, get) => ({
     if (!a) return false;
     const t = Date.now();
     const shouldAddPoint = haversineM(a.route[a.route.length - 1] ?? a, pos) > TRACK_MIN_STEP_M;
+    const before = get().attendances;
     set({
-      attendances: get().attendances.map((x) =>
+      attendances: before.map((x) =>
         x.id === a.id
           ? {
               ...x,
@@ -830,7 +839,10 @@ export const useStore = create<StoreState>()((set, get) => ({
       .from('attendances')
       .update({ clock_out_at: new Date(t).toISOString(), clock_out_lat: pos.lat, clock_out_lng: pos.lng })
       .eq('id', a.id);
-    if (error) console.warn('clockOut failed:', error.message);
+    if (error) {
+      set({ attendances: before });
+      throw new Error(error.message);
+    }
     if (shouldAddPoint) {
       const { error: rpErr } = await supabase
         .from('route_points')

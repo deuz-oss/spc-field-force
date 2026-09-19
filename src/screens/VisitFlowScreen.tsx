@@ -155,8 +155,12 @@ export default function VisitFlowScreen() {
       return;
     }
     const doFinish = async () => {
-      await finishVisit(visit.id);
-      navigation.goBack();
+      try {
+        await finishVisit(visit.id);
+        navigation.goBack();
+      } catch {
+        showDialog('Gagal Check-out', 'Tidak dapat menyimpan check-out ke server. Periksa koneksi internet dan coba lagi.');
+      }
     };
     if (!visit.geoValid) {
       showDialog(

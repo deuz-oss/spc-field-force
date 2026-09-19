@@ -112,6 +112,8 @@ function ClockCard({ me }: { me: User }) {
       );
       // when queued offline, clockOutStore already shows its own "Tersimpan Offline" dialog
       if (!queued) showDialog('Clock Out berhasil');
+    } catch {
+      showDialog('Gagal Clock Out', 'Tidak dapat menyimpan clock-out ke server. Periksa koneksi internet dan coba lagi.');
     } finally {
       setBusy(false);
     }

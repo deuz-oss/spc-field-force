@@ -69,7 +69,7 @@ export default function MerchantDetailScreen() {
         );
         geoValid = dist <= VISIT_VALID_RADIUS_M;
       }
-      const id = startVisit(merchant.id, me.id, { lat: pos.coords.latitude, lng: pos.coords.longitude }, dist, geoValid);
+      const id = await startVisit(merchant.id, me.id, { lat: pos.coords.latitude, lng: pos.coords.longitude }, dist, geoValid);
       navigation.navigate('VisitFlow', { visitId: id });
     } catch {
       showDialog('Gagal', 'Tidak dapat mengambil lokasi. Coba lagi.');

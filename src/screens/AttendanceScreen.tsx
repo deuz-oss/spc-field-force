@@ -29,7 +29,7 @@ function LiveSessionCard({ me }: { me: ReturnType<typeof useCurrentUser> }) {
     setBusy(true);
     try {
       const last = active.route[active.route.length - 1] ?? { lat: active.clockInLat, lng: active.clockInLng };
-      clockOutStore(last);
+      await clockOutStore(last);
       showDialog('Clock Out berhasil');
     } finally {
       setBusy(false);

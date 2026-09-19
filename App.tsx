@@ -36,6 +36,7 @@ import VisitsScreen from './src/screens/VisitsScreen';
 import AttendanceScreen from './src/screens/AttendanceScreen';
 import AttendanceDetailScreen from './src/screens/AttendanceDetailScreen';
 import ReportsScreen from './src/screens/ReportsScreen';
+import LiveMapScreen from './src/screens/LiveMapScreen';
 import UsersScreen from './src/screens/UsersScreen';
 import ProfileScreen from './src/screens/ProfileScreen';
 import { TrackingWatcher } from './src/components/TrackingWatcher';
@@ -49,6 +50,7 @@ const TAB_ICON: Record<string, keyof typeof Ionicons.glyphMap> = {
   Kunjungan: 'walk-outline',
   Absensi: 'time-outline',
   Laporan: 'bar-chart-outline',
+  'Peta Live': 'navigate-outline',
   Pengguna: 'people-outline',
   Profil: 'person-circle-outline',
 };
@@ -179,10 +181,10 @@ function MainTabs({ role, me }: { role: Role; me: User }) {
   const { isDesktop } = useBreakpoint();
   const tabs =
     role === 'super_admin'
-      ? ['Dashboard', 'Merchant', 'Laporan', 'Pengguna', 'Profil']
+      ? ['Dashboard', 'Merchant', 'Laporan', 'Peta Live', 'Pengguna', 'Profil']
       : role === 'field_agent'
       ? ['Dashboard', 'Merchant', 'Kunjungan', 'Absensi', 'Profil']
-      : ['Dashboard', 'Merchant', 'Laporan', 'Profil']; // admin, team_lead, client
+      : ['Dashboard', 'Merchant', 'Laporan', 'Peta Live', 'Profil']; // admin, team_lead, client
 
   const screenFor = (name: string) => {
     switch (name) {
@@ -196,6 +198,8 @@ function MainTabs({ role, me }: { role: Role; me: User }) {
         return AttendanceScreen;
       case 'Laporan':
         return ReportsScreen;
+      case 'Peta Live':
+        return LiveMapScreen;
       case 'Pengguna':
         return UsersScreen;
       default:
@@ -252,6 +256,10 @@ export default function App() {
     PlusJakartaSans_700Bold,
     PlusJakartaSans_800ExtraBold,
   });
+
+  React.useEffect(() => {
+    useStore.getState().init();
+  }, []);
 
   if (!ready || !fontsLoaded)
     return (

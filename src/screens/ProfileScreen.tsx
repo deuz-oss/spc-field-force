@@ -103,13 +103,8 @@ export default function ProfileScreen() {
 
       <Btn
         variant="outline"
-        title="Reset Data Demo"
-        onPress={() =>
-          showDialog('Reset Demo', 'Semua data akan dikembalikan ke kondisi awal.', [
-            { label: 'Batal' },
-            { label: 'Reset', destructive: true, onPress: resetDemo },
-          ])
-        }
+        title="Muat Ulang Data"
+        onPress={() => resetDemo()}
       />
 
       <Muted style={{ textAlign: 'center' }}>

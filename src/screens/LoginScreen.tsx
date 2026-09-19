@@ -28,7 +28,7 @@ function BrandPane() {
       <View style={styles.trustRow}>
         <TrustPoint icon="shield-checkmark-outline" label="Geo-fence & audit trail" />
         <TrustPoint icon="analytics-outline" label="KPI/SLA real-time" />
-        <TrustPoint icon="cloud-offline-outline" label="Berjalan offline-first" />
+        <TrustPoint icon="navigate-outline" label="Live tracking lintas perangkat" />
       </View>
     </View>
   );
@@ -50,8 +50,13 @@ export default function LoginScreen() {
   const [password, setPassword] = useState('');
   const [err, setErr] = useState<string | null>(null);
   const [showDemo, setShowDemo] = useState(false);
+  const [busy, setBusy] = useState(false);
 
-  const submit = () => setErr(login(username, password));
+  const submit = async () => {
+    setBusy(true);
+    setErr(await login(username, password));
+    setBusy(false);
+  };
 
   const quick = (u: string, p: string) => {
     setUsername(u);
@@ -72,7 +77,7 @@ export default function LoginScreen() {
           <Input value={password} onChangeText={setPassword} secureTextEntry placeholder="••••••" />
         </Field>
         {err ? <Text style={{ color: C.accent, fontSize: 12.5, fontWeight: '600' }}>{err}</Text> : null}
-        <Btn title="Masuk" onPress={submit} loading={false} />
+        <Btn title="Masuk" onPress={submit} loading={busy} disabled={busy} />
       </Card>
 
       <TouchableOpacity

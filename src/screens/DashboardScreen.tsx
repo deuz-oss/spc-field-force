@@ -77,13 +77,15 @@ function ClockCard({ me }: { me: User }) {
             {
               label: 'Clock In sebagai pengecualian',
               destructive: true,
-              onPress: () => clockInStore(c, false),
+              onPress: () => {
+                clockInStore(c, false);
+              },
             },
           ],
         );
         return;
       }
-      clockInStore(c, ok);
+      await clockInStore(c, ok);
     } finally {
       setBusy(false);
     }
@@ -93,7 +95,7 @@ function ClockCard({ me }: { me: User }) {
     setBusy(true);
     try {
       const c = await getCurrentCoords();
-      clockOutStore(
+      await clockOutStore(
         c ??
           (active
             ? active.route[active.route.length - 1] ?? {

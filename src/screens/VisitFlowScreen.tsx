@@ -62,7 +62,7 @@ export default function VisitFlowScreen() {
         );
         geoValid = dist <= VISIT_VALID_RADIUS_M;
       }
-      const id = startVisit(merchant.id, me.id, { lat: pos.coords.latitude, lng: pos.coords.longitude }, dist, geoValid);
+      const id = await startVisit(merchant.id, me.id, { lat: pos.coords.latitude, lng: pos.coords.longitude }, dist, geoValid);
       // ganti layar agar langsung masuk mode isi data kunjungan
       navigation.replace('VisitFlow', { visitId: id });
     } catch {
@@ -147,8 +147,8 @@ export default function VisitFlowScreen() {
       );
       return;
     }
-    const doFinish = () => {
-      finishVisit(visit.id);
+    const doFinish = async () => {
+      await finishVisit(visit.id);
       navigation.goBack();
     };
     if (!visit.geoValid) {

@@ -55,8 +55,8 @@ export default function UsersScreen() {
     );
   }
 
-  const submitUser = () => {
-    const err = addUser({ name, username, password, role, teamId, phone });
+  const submitUser = async () => {
+    const err = await addUser({ name, username, password, role, teamId, phone });
     if (err) {
       showDialog('Tidak bisa menyimpan', err);
       return;
@@ -76,9 +76,9 @@ export default function UsersScreen() {
     setEPassword('');
   };
 
-  const saveEdit = () => {
+  const saveEdit = async () => {
     if (!editId) return;
-    const err = updateUser(editId, {
+    const err = await updateUser(editId, {
       role: eRole,
       teamId: TEAMLESS_ROLES.includes(eRole) ? null : eTeamId,
       password: ePassword,
@@ -97,8 +97,8 @@ export default function UsersScreen() {
       {
         label: 'Reset',
         destructive: true,
-        onPress: () => {
-          const err = updateUser(
+        onPress: async () => {
+          const err = await updateUser(
             users.find((u) => u.username === uname)!.id,
             { password: 'spc12345' },
           );

@@ -1,0 +1,95 @@
+// Supabase Edge Function: privileged user-provisioning operations that the
+// mobile app must never do itself (it never holds the service-role key).
+// Deploy with: supabase functions deploy admin-users
+//
+// Called from src/store/useStore.ts's addUser/updateUser (password branch)
+// actions, gated to super_admin per UsersScreen.tsx:50's existing guard -
+// re-checked here server-side too, since this function's own client uses
+// the service-role key and therefore bypasses RLS entirely by design.
+import { createClient } from 'jsr:@supabase/supabase-js@2';
+
+const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
+const SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+
+type CreateBody = {
+  action: 'create';
+  username: string;
+  password: string;
+  name: string;
+  role: string;
+  teamId: string | null;
+  phone?: string;
+};
+
+type SetPasswordBody = {
+  action: 'setPassword';
+  userId: string;
+  password: string;
+};
+
+type Body = CreateBody | SetPasswordBody;
+
+Deno.serve(async (req) => {
+  try {
+    const authHeader = req.headers.get('Authorization');
+    if (!authHeader) return json({ error: 'Missing Authorization header' }, 401);
+
+    // Client bound to the CALLER's JWT, used only to verify who they are.
+    const callerClient = createClient(SUPABASE_URL, SERVICE_ROLE_KEY, {
+      global: { headers: { Authorization: authHeader } },
+    });
+    const {
+      data: { user: caller },
+      error: userErr,
+    } = await callerClient.auth.getUser();
+    if (userErr || !caller) return json({ error: 'Not authenticated' }, 401);
+
+    const { data: callerProfile, error: profileErr } = await callerClient
+      .from('profiles')
+      .select('role')
+      .eq('id', caller.id)
+      .single();
+    if (profileErr || callerProfile?.role !== 'super_admin') {
+      return json({ error: 'Forbidden: super_admin only' }, 403);
+    }
+
+    // Elevated client for the actual privileged operation.
+    const admin = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
+    const body = (await req.json()) as Body;
+
+    if (body.action === 'create') {
+      const email = `${body.username.trim().toLowerCase()}@internal.spc`;
+      const { data, error } = await admin.auth.admin.createUser({
+        email,
+        password: body.password,
+        email_confirm: true,
+        user_metadata: {
+          name: body.name,
+          username: body.username,
+          role: body.role,
+          team_id: body.teamId,
+          phone: body.phone ?? null,
+        },
+      });
+      if (error) return json({ error: error.message }, 400);
+      return json({ id: data.user.id });
+    }
+
+    if (body.action === 'setPassword') {
+      const { error } = await admin.auth.admin.updateUserById(body.userId, { password: body.password });
+      if (error) return json({ error: error.message }, 400);
+      return json({ ok: true });
+    }
+
+    return json({ error: 'Unknown action' }, 400);
+  } catch (err) {
+    return json({ error: err instanceof Error ? err.message : 'Unknown error' }, 500);
+  }
+});
+
+function json(body: unknown, status = 200): Response {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { 'Content-Type': 'application/json' },
+  });
+}

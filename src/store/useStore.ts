@@ -573,6 +573,10 @@ export const useStore = create<StoreState>()((set, get) => ({
     const target = get().users.find((u) => u.id === id);
     if (!target) return;
     const nextActive = !target.active;
+    if (!nextActive && id === get().sessionUserId) {
+      showDialog('Tidak Bisa Menonaktifkan Diri Sendiri', 'Minta akun super admin lain untuk menonaktifkan akun ini.');
+      return;
+    }
     set({ users: get().users.map((u) => (u.id === id ? { ...u, active: nextActive } : u)) });
     const { error } = await supabase.from('profiles').update({ active: nextActive }).eq('id', id);
     if (error) {

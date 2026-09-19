@@ -11,6 +11,13 @@ export const TRACK_MIN_STEP_M = 8;
 /** Interval minimum update GPS saat tracking (ms) */
 export const TRACK_INTERVAL_MS = 15000;
 
+/** Radius pengelompokan titik rute jadi satu "titik berhenti" (m) */
+export const STOP_CLUSTER_RADIUS_M = 40;
+/** Durasi minimum di satu titik agar dihitung sebagai "berhenti" (ms) — di bawah ini dianggap lampu merah/macet */
+export const STOP_MIN_DURATION_MS = 10 * 60 * 1000;
+/** Durasi berhenti di luar lokasi merchant yang ditandai "perlu ditinjau" (ms) */
+export const STOP_FLAG_DURATION_MS = 30 * 60 * 1000;
+
 /**
  * Rate Quotation Option 3 - Integrated Merchant Acquisition & Incubation
  * (contoh angka sesuai quotation; dapat disesuaikan)

@@ -19,6 +19,7 @@ import { useCurrentUser, useStore } from '../store/useStore';
 import { VisitDoc, VisitResult } from '../types';
 import { fmtDurClock, fmtDateTime } from '../utils/format';
 import { haversineM } from '../utils/geo';
+import { deleteVisitMedia, extFromUri, uploadVisitMedia } from '../utils/storage';
 
 export default function VisitFlowScreen() {
   const route = useRoute<any>();
@@ -34,6 +35,7 @@ export default function VisitFlowScreen() {
   const merchant = merchants.find((m) => m.id === visit?.merchantId);
   const [now, setNow] = useState(Date.now());
   const [savingLoc, setSavingLoc] = useState(false);
+  const [uploading, setUploading] = useState(false);
 
   useEffect(() => {
     if (!visit || visit.checkOutAt) return;
@@ -99,6 +101,29 @@ export default function VisitFlowScreen() {
     }
   };
 
+  /** Uploads picked assets to Storage first so photos/docs stay visible from any device. */
+  const uploadPhotoAssets = async (assets: ImagePicker.ImagePickerAsset[]) => {
+    if (!visit) return;
+    setUploading(true);
+    try {
+      const results = await Promise.allSettled(
+        assets.map((a) => uploadVisitMedia(visit.id, a.uri, extFromUri(a.fileName ?? a.uri), a.mimeType)),
+      );
+      const urls = results.filter((r) => r.status === 'fulfilled').map((r) => (r as PromiseFulfilledResult<string>).value);
+      const failed = results.length - urls.length;
+      if (urls.length) {
+        updateVisit(visit.id, { photos: [...visit.photos, ...urls].slice(0, 10) });
+      }
+      if (failed) {
+        showDialog('Sebagian gagal diupload', `${failed} dari ${results.length} foto gagal diupload. Coba lagi.`);
+      }
+    } catch {
+      showDialog('Gagal', 'Tidak dapat mengupload foto. Periksa koneksi internet.');
+    } finally {
+      setUploading(false);
+    }
+  };
+
   const pickPhotos = async () => {
     if (!visit) return;
     const res = await ImagePicker.launchImageLibraryAsync({
@@ -108,9 +133,7 @@ export default function VisitFlowScreen() {
       quality: 0.4,
     });
     if (!res.canceled && res.assets.length) {
-      updateVisit(visit.id, {
-        photos: [...visit.photos, ...res.assets.map((a) => a.uri)].slice(0, 10),
-      });
+      await uploadPhotoAssets(res.assets);
     }
   };
 
@@ -123,7 +146,7 @@ export default function VisitFlowScreen() {
     }
     const res = await ImagePicker.launchCameraAsync({ quality: 0.4 });
     if (!res.canceled && res.assets[0]) {
-      updateVisit(visit.id, { photos: [...visit.photos, res.assets[0].uri].slice(0, 10) });
+      await uploadPhotoAssets([res.assets[0]]);
     }
   };
 
@@ -134,8 +157,29 @@ export default function VisitFlowScreen() {
       copyToCacheDirectory: true,
     });
     if (res.canceled) return;
-    const docs: VisitDoc[] = res.assets.map((a) => ({ name: a.name ?? 'dokumen', uri: a.uri }));
-    updateVisit(visit.id, { docs: [...visit.docs, ...docs].slice(0, 8) });
+    setUploading(true);
+    try {
+      const results = await Promise.allSettled(
+        res.assets.map(async (a) => ({
+          name: a.name ?? 'dokumen',
+          uri: await uploadVisitMedia(visit.id, a.uri, extFromUri(a.name, 'pdf'), a.mimeType),
+        })),
+      );
+      const docs = results
+        .filter((r): r is PromiseFulfilledResult<VisitDoc> => r.status === 'fulfilled')
+        .map((r) => r.value);
+      const failed = results.length - docs.length;
+      if (docs.length) {
+        updateVisit(visit.id, { docs: [...visit.docs, ...docs].slice(0, 8) });
+      }
+      if (failed) {
+        showDialog('Sebagian gagal diupload', `${failed} dari ${results.length} dokumen gagal diupload. Coba lagi.`);
+      }
+    } catch {
+      showDialog('Gagal', 'Tidak dapat mengupload dokumen. Periksa koneksi internet.');
+    } finally {
+      setUploading(false);
+    }
   };
 
   const checkOut = () => {
@@ -301,10 +345,11 @@ export default function VisitFlowScreen() {
             {visit.photos.map((p, i) => (
               <TouchableOpacity
                 key={`${p}-${i}`}
-                onLongPress={() =>
-                  editable &&
-                  updateVisit(visit.id, { photos: visit.photos.filter((_, j) => j !== i) })
-                }
+                onLongPress={() => {
+                  if (!editable) return;
+                  deleteVisitMedia(p);
+                  updateVisit(visit.id, { photos: visit.photos.filter((_, j) => j !== i) });
+                }}
               >
                 <Image source={{ uri: p }} style={{ width: 72, height: 72, borderRadius: 8 }} />
               </TouchableOpacity>
@@ -313,8 +358,8 @@ export default function VisitFlowScreen() {
         )}
         {editable && (
           <View style={{ flexDirection: 'row', gap: 8, marginTop: 10 }}>
-            <Btn small variant="outline" title="Kamera" onPress={takePhoto} />
-            <Btn small variant="outline" title="Galeri" onPress={pickPhotos} />
+            <Btn small variant="outline" title={uploading ? 'Mengupload...' : 'Kamera'} onPress={takePhoto} disabled={uploading} />
+            <Btn small variant="outline" title={uploading ? 'Mengupload...' : 'Galeri'} onPress={pickPhotos} disabled={uploading} />
           </View>
         )}
       </Card>
@@ -335,11 +380,12 @@ export default function VisitFlowScreen() {
             <Text style={{ fontSize: 12, color: C.text, flexShrink: 1 }} numberOfLines={1}>
               {d.name}
             </Text>
-            {!editable && (
+            {editable && (
               <TouchableOpacity
-                onPress={() =>
-                  updateVisit(visit.id, { docs: visit.docs.filter((_, j) => j !== i) })
-                }
+                onPress={() => {
+                  deleteVisitMedia(d.uri);
+                  updateVisit(visit.id, { docs: visit.docs.filter((_, j) => j !== i) });
+                }}
               >
                 <Text style={{ color: C.accent, fontWeight: '700' }}>Hapus</Text>
               </TouchableOpacity>
@@ -348,7 +394,7 @@ export default function VisitFlowScreen() {
         ))}
         {editable && (
           <View style={{ marginTop: 8 }}>
-            <Btn small variant="outline" title="Upload Dokumen" onPress={pickDocs} />
+            <Btn small variant="outline" title={uploading ? 'Mengupload...' : 'Upload Dokumen'} onPress={pickDocs} disabled={uploading} />
           </View>
         )}
       </Card>

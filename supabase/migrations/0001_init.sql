@@ -168,6 +168,14 @@ using (
   or ( not archived and public.current_role() = 'team_lead' and team_id = public.current_team_id() )
   or ( not archived and public.current_role() = 'field_agent' and assigned_to = auth.uid() )
 );
+-- Currently dormant, but this is the exact same shape of bug fixed on profiles_select
+-- below: if an archive/unarchive feature is ever added via a direct client-side
+-- UPDATE (rather than a security-definer RPC), doing so for super_admin/admin/client
+-- would hit the same UPDATE...RETURNING-vs-SELECT-policy trap — archiving a merchant
+-- would make its own RETURNING row invisible (explicit RLS error), and unarchiving an
+-- already-archived one would fail silently (0 rows matched, already invisible before
+-- the write). No code path sets `archived` today (the column isn't even in the app's
+-- Merchant type), so this is inert for now — just don't repeat the mistake.
 
 create policy merchants_insert on public.merchants for insert
 with check (

@@ -577,6 +577,7 @@ export const useStore = create<StoreState>()((set, get) => ({
     const { error } = await supabase.from('profiles').update({ active: nextActive }).eq('id', id);
     if (error) {
       set({ users: get().users.map((u) => (u.id === id ? { ...u, active: target.active } : u)) });
+      showDialog('Gagal Menyimpan', 'Tidak dapat mengubah status pengguna. Periksa koneksi internet dan coba lagi.');
     }
   },
 
@@ -626,7 +627,10 @@ export const useStore = create<StoreState>()((set, get) => ({
       lng: t.lng,
       radius_km: t.radiusKm,
     });
-    if (error) set({ teams: get().teams.filter((x) => x.id !== t.id) });
+    if (error) {
+      set({ teams: get().teams.filter((x) => x.id !== t.id) });
+      showDialog('Gagal Menyimpan', 'Tidak dapat menyimpan tim baru. Periksa koneksi internet dan coba lagi.');
+    }
   },
 
   upsertMerchant: async (m) => {
@@ -664,15 +668,19 @@ export const useStore = create<StoreState>()((set, get) => ({
       const a = get().users.find((u) => u.id === agentId);
       teamId = a?.teamId ?? null;
     }
+    const before = get().merchants;
     set({
-      merchants: get().merchants.map((m) =>
+      merchants: before.map((m) =>
         ids.includes(m.id) ? { ...m, assignedTo: agentId, teamId: agentId ? teamId! : m.teamId } : m,
       ),
     });
     const patch: Record<string, unknown> = { assigned_to: agentId };
     if (agentId) patch.team_id = teamId;
     const { error } = await supabase.from('merchants').update(patch).in('id', ids);
-    if (error) console.warn('assignMerchants failed:', error.message);
+    if (error) {
+      set({ merchants: before });
+      showDialog('Gagal Menyimpan', 'Tidak dapat menyimpan assignment merchant. Periksa koneksi internet dan coba lagi.');
+    }
   },
 
   startVisit: async (merchantId, agentId, pos, distM, geoValid) => {

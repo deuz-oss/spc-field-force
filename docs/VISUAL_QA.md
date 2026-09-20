@@ -1,63 +1,41 @@
-# Visual QA — Before / After
+# Visual QA — v2 ("Field Ledger") pass
 
-Method: ran `expo start --web` on port 8081, logged in via each demo account, and captured the actual rendered app in Chrome before and after the redesign (not just code inspection). Screens covered: Login, Dashboard (Field Agent + Super Admin), Merchant list, Merchant detail, Visit flow, Reports, Users, Profile (Field Agent + Super Admin).
+This replaces the v1 QA log. Scope was set explicitly in the v2 plan: a rigorous pass (both web and native, multiple roles, multiple viewport tiers) on the highest-traffic screens, plus a lighter pass (typecheck + at least one screenshot) on the rest — called out here rather than silently claiming exhaustive coverage.
 
-## Login
-- **Before:** full-bleed blue mobile card stretched to full desktop width; all 5 demo credentials listed as plain buttons below the fold.
-- **After:** two-pane layout on wide screens (brand/trust copy left, form right); demo accounts collapsed behind a "Lingkungan Demo" disclosure so the primary sign-in flow is uncluttered.
-- **Verified interaction:** disclosure toggle opens/closes and demo buttons still autofill correctly.
+## Method
 
-## Dashboard — Field Agent
-- **Before:** identical structure to management (team funnel, org merchant snapshot, all-agents performance list) filtered down to one agent — mostly empty/irrelevant sections.
-- **After:** Clock card, 2 personal KPI cards with target/status, "Merchant Prioritas" (assigned merchants, cold-start first, tap-through to detail), personal funnel only. No team-wide data.
+- **Web**: `mcp__claude-in-chrome__*` against the Expo web build served by Metro at `localhost:8081`. Standard viewport plus a `javascript_tool`-injected fixed-size `<iframe>` to approximate a ~390px mobile width (see limitation below).
+- **Native**: `adb` screenshots on a physical Android device (`RRCX302HB6K`) via `C:\Users\user\SFA-emu\android-sdk\platform-tools\adb.exe`, relaunching the app (`am force-stop` + `monkey`) and waiting for the Metro JS bundle to finish rebuilding before capturing.
+- **Static**: `npx tsc --noEmit` after every single file edit throughout the whole pass — stayed clean the entire time.
 
-## Dashboard — Super Admin / management
-- **Before:** stacked 2-column `StatCard`s with bare numbers, funnel as a wrapped row of colored badges, no target/variance shown next to any number, agent status conveyed by badge color+text only.
-- **After:** 5-card KPI strip (`KPICard`) each with target, status icon+label+color, computed live from the same store data; a "Perlu Perhatian" exceptions block that only appears when agents are actually below target; funnel rendered as proportional horizontal bars (`FunnelChart`); per-agent rows now show a `StatusBadge` (icon + color + text).
-- **Functional bug found and fixed while reviewing this screen's map dependency:** `LeafletMap` used `react-native-webview`, which has no Web implementation — every map on Web rendered literally as *"React Native WebView does not support this platform"*. Fixed by rendering a native `<iframe srcDoc>` on `Platform.OS === 'web'` and keeping `WebView` for native. Verified: merchant pin and attendance route maps now render correctly in the browser.
+## Rigorous pass (web + native, multiple roles)
 
-## Merchant list
-- **Before:** single-column card list even at desktop width (~1280px viewport observed), agent/team assignment shown as small 11px text at the bottom.
-- **After:** 2-column responsive grid on desktop (`isDesktop` from `useBreakpoint`), `ListRow` with a left color bar keyed to assignment status, row count shown above the list.
+| Screen | Roles checked | Result |
+|---|---|---|
+| Login | — | "Quotation Option 3" copy removed confirmed; ink brand pane with gold badge/icon renders correctly; demo-account buttons no longer leak plaintext password; gold primary button has correct ink text |
+| Dashboard (management) | Ops Manager | Gold "Urut Kunjungan" active sort chip; KPI cards show new colored top-border signal; funnel chart values render in mono |
+| Dashboard (field agent) | Field Agent (Budi) | Gold CLOCK IN button correct ink text; `ClockCard` timer renders in mono; geo-fence badge renders as `GeoValidBadge` |
+| Merchant detail | Field Agent | "Geo valid" now a real green icon+label badge (was plain text pre-v2); `StickyFooter` CHECK IN bar renders correctly |
+| Reports | Super Admin | Consolidated `ExportCard` renders identically across all 3 export types; fee-estimate total renders in bronze bold with `Divider` |
+| Profile | Super Admin | Avatar initial renders in ink-on-gold (post-fix); role badge renders in bronze text |
+| App shell / nav | all | Ink header + ink rail unified chrome confirmed on both web and native; desktop rail active state shows gold left-accent bar; native bottom-tab bar shows gold active label |
 
-## Merchant detail
-- **Before:** map broken (see above); CHECK IN button same visual weight as manager tools below it.
-- **After:** map fixed; for Field Agent, CHECK IN / continue-visit is now a sticky full-width bottom bar that stays visible while scrolling through merchant info, history, etc.
+Native-device checks specifically targeted the two riskiest changes in this pass — a new font asset (IBM Plex Mono) and a new responsive nav tier — since a font/layout regression is exactly the kind of thing that can look fine on web and break silently on-device. Both confirmed correct on the physical device.
 
-## Visit flow
-- **Before:** a stale seed visit (checked in 23 Aug, never checked out) rendered a **572:34:33** hour counter — nonsensical and gave no path to resolve it. CHECK OUT and "Simpan Draf" buttons had equal visual weight. Checkout had no confirmation when geo was valid (only when invalid).
-- **After:** sessions open >12h show a "Sesi lama — perlu ditinjau" status badge instead of a giant clock; CHECK OUT is a sticky green bottom bar, visually dominant over the now-secondary "Simpan Draf" outline button; checkout always asks for confirmation (previously only on invalid geo) since it permanently locks the record.
+## Lighter pass (typecheck + at least one screenshot)
 
-## Attendance
-- **Before:** if a session was active, the Attendance tab only showed a passive text banner telling the user to go manage it from Dashboard — a dead end.
-- **After:** a live session card (timer + geo-fence status + CHECK OUT) mirrors the Dashboard clock card directly on the Attendance tab.
+Merchants list, Visit flow, Visits list, Attendance list/detail, Live Map, Users — each typechecked clean and screenshotted at least once; not cross-checked across every role × every viewport combination.
 
-## Reports
-- **Before:** all export buttons solid/primary, same weight as the fee-estimation card; no indication of how much data an export contains before downloading.
-- **After:** export buttons are outline/secondary; each shows a row-count line for the currently selected period before the user commits to downloading.
+## Known limitation: iframe mobile-viewport simulation
 
-## Profile
-- **Before:** every role saw "Kunjungan / Jam Kerja / Jarak / Merchant Saya" — for Super Admin/Client/Ops Manager these always read 0, implying a broken account.
-- **After:** only `field_agent`/`team_lead` see the personal-activity KPI block; other roles see a "Ringkasan Akses" card (team/user/merchant counts in their scope) instead.
+Injecting a fixed-size `<iframe>` to approximate a 390px mobile viewport correctly reproduced scrollable-content layout (no horizontal overflow, correct KPI card column count) but did **not** show the bottom tab bar within the iframe's visible bounds, even after adjusting iframe height. This was confirmed to be a test-harness artifact — the iframe's own document doesn't inherit the same `100vh`-constrained root layout a real browser tab gets — not a real app bug, by cross-checking the same screen on the physical Android device, where the bottom tab bar rendered correctly with the gold active state.
 
-## App shell (all screens)
-- **Before:** double header — a Stack header ("Main") stacked directly above the Tab header, wasting ~120px vertically on every screen.
-- **After:** single header, now carrying a role badge; desktop/tablet (≥900px) additionally get a persistent left rail with user identity, replacing the bottom tab bar only at that width — mobile bottom tabs are untouched.
+**Takeaway for future QA on this app**: the iframe technique is fine for checking overflow/column-count/spacing at a given width, but is not authoritative for anything involving fixed/sticky-positioned elements pinned to a viewport edge (tab bars, `StickyFooter`). Use a real device or an actual resized browser window for those.
 
-## Mobile verification (Android emulator, real device pixels)
+## Validation
 
-The Chrome window in the initial QA pass could not be resized below ~1280px (`resize_window` reported success but `window.innerWidth` never changed), so the small-mobile breakpoint was first verified by code review only. This was closed out with an actual Android emulator (`emulator-5554`, Android 14) already running on the dev machine, loaded via Expo Go over the same Metro dev server:
+`npx tsc --noEmit` — clean after every phase and on the final full-repo check. No new native modules were added in this pass (IBM Plex Mono is a pure JS/asset font package, loaded via the existing `expo-font` `useFonts` call), so no EAS rebuild was required to test it — confirmed by loading it on the physical device with only a Metro reload.
 
-- **Login:** correct single-column mobile layout, brand hero, collapsed demo disclosure — matches the design intent for narrow widths.
-- **Dashboard (Field Agent):** bottom tab bar (not the desktop rail) renders as expected; personal KPI cards, Merchant Prioritas list all correct.
-- **Merchant Detail:** map renders correctly (native `WebView` path, unaffected by the web `<iframe>` fix); sticky CHECK IN bar and visit history both correct.
-- **Bug found and fixed via this device pass:** the header's role badge (`ROLE_LABEL[role]`, e.g. "Field Agent (merangkap Incubation Agent)") had no line-wrap guard, so on a real ~360–411dp-wide phone it wrapped to two lines and made the header uneven — invisible on the wide desktop window used for the rest of this QA pass. Fixed in `App.tsx` with `numberOfLines={1}`, `ellipsizeMode="tail"`, and a `maxWidth: 170` cap on the badge container.
+## Not covered in this pass
 
-## Tablet verification (700–900dp)
-
-Verified by forcing the actual web viewport to 700px, 820px, 899px, and the 900px desktop-threshold transition (an iframe with a fixed CSS width, so `window.innerWidth` — what `useBreakpoint()` reads via `useWindowDimensions` — reflects a genuine narrower viewport rather than the outer Chrome window, which could not be resized below ~1280px). Checked Dashboard, Merchant list, and Reports under Super Admin.
-
-- **700–899px:** bottom tab bar (no rail), header role badge stays on one line, Merchant list stays single-column (`isDesktop`-gated per `MerchantsScreen.tsx`, so this is expected, not a bug), month-chip row in Reports scrolls horizontally as it always has.
-- **900px (desktop threshold):** left rail appears cleanly, no overlap or overlap glitches. The rail claims ~185px, so the Reports month-chip row needs horizontal scrolling sooner than at 899px — an existing scroll pattern, not a new regression.
-
-No breakage found. This closes out the previously-unverified tablet range.
+iOS was not tested on-device or in a simulator (no iOS device available in this environment) — web + Android were the two targets verified live. See the final report's remaining-recommendations section.

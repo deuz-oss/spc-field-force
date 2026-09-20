@@ -5,7 +5,7 @@ import * as DocumentPicker from 'expo-document-picker';
 import { Badge, Btn, Card, Chip, Empty, H, Muted, SectionHeader } from '../components/ui';
 import { showDialog } from '../components/dialog';
 import { STATUS_LABEL, TIER_LABEL, MANAGER_ROLES } from '../config';
-import { C, STATUS_COLOR } from '../theme';
+import { C, F, STATUS_COLOR } from '../theme';
 import { useCurrentUser, useStore } from '../store/useStore';
 import { Merchant } from '../types';
 import { parseCsv } from '../utils/csv';
@@ -150,12 +150,12 @@ export default function ImportScreen() {
   }
 
   return (
-    <ScrollView contentContainerStyle={{ padding: 16, gap: 12, maxWidth: 900, width: '100%', alignSelf: 'center' }}>
+    <ScrollView tabIndex={0} role="main" contentContainerStyle={{ padding: 16, gap: 12, maxWidth: 900, width: '100%', alignSelf: 'center' }}>
       <SectionHeader title="Impor Daftar Merchant" subtitle="Unggah CSV, lalu tetapkan ke agen sebelum menyimpan" />
       <Card>
         <Muted>
           Format kolom CSV:{'\n'}
-          <Text style={{ fontWeight: '700', color: C.text }}>
+          <Text style={{ fontFamily: F.bold, color: C.text }}>
             nama, alamat, telepon, pemilik, kategori, lat, lng
           </Text>
           {'\n'}Kolom wajib: nama. Lat/lng opsional.
@@ -175,7 +175,7 @@ export default function ImportScreen() {
             />
             {assignable.length > 0 && (
               <>
-                <Muted style={{ marginTop: 10, fontWeight: '600' }}>Assign semua ke agen (opsional):</Muted>
+                <Muted style={{ marginTop: 10, fontFamily: F.semi }}>Assign semua ke agen (opsional):</Muted>
                 <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 6 }}>
                   <Chip label="Tanpa assign" active={agentId == null} onPress={() => setAgentId(null)} />
                   {assignable.map((a) => (
@@ -219,7 +219,7 @@ export default function ImportScreen() {
                   }}
                 >
                   <View style={{ flexShrink: 1 }}>
-                    <Text style={{ fontWeight: '600', fontSize: 13, color: C.text }} numberOfLines={1}>
+                    <Text style={{ fontFamily: F.semi, fontSize: 13, color: C.text }} numberOfLines={1}>
                       {r.name}
                     </Text>
                     <Text style={{ color: C.muted, fontSize: 12 }} numberOfLines={1}>

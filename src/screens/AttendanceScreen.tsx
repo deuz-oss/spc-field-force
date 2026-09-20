@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { FlatList, Text, View } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
-import { Btn, Card, Empty, H, ListRow, Muted, StatusBadge } from '../components/ui';
+import { Btn, Card, Empty, GeoValidBadge, H, ListRow, Muted } from '../components/ui';
 import { showDialog } from '../components/dialog';
 import { C, T } from '../theme';
 import { useCurrentUser, useStore } from '../store/useStore';
@@ -43,13 +43,9 @@ function LiveSessionCard({ me }: { me: ReturnType<typeof useCurrentUser> }) {
     <Card>
       <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
         <H>Sesi Berlangsung</H>
-        <StatusBadge
-          label={active.geoFenceOk ? 'Dalam geo-fence' : 'Pengecualian'}
-          color={active.geoFenceOk ? C.ok : C.accent}
-          icon={active.geoFenceOk ? 'shield-checkmark' : 'warning'}
-        />
+        <GeoValidBadge ok={active.geoFenceOk} okLabel="Dalam geo-fence" badLabel="Pengecualian" />
       </View>
-      <Text style={[T.display, { color: C.primary, marginTop: 4 }]}>{fmtDurClock(now - active.clockInAt)}</Text>
+      <Text style={[T.timer, { marginTop: 4 }]}>{fmtDurClock(now - active.clockInAt)}</Text>
       <Muted style={{ marginBottom: 8 }}>
         Masuk {fmtTime(active.clockInAt)} · {fmtKm(polylineKm(active.route))} · {active.route.length} titik rute
       </Muted>
@@ -69,7 +65,7 @@ export default function AttendanceScreen() {
     .sort((a, b) => b.clockInAt - a.clockInAt);
 
   return (
-    <View style={{ flex: 1 }}>
+    <View role="main" style={{ flex: 1 }}>
       <View style={{ paddingHorizontal: 16, paddingTop: 12, gap: 12 }}>
         <LiveSessionCard me={me} />
         <H>Riwayat Absensi Saya ({mine.length})</H>
@@ -84,7 +80,7 @@ export default function AttendanceScreen() {
             onPress={() => navigation.navigate('AttendanceDetail', { id: a.id })}
             title={fmtDate(a.clockInAt)}
             subtitle={`${fmtTime(a.clockInAt)} → ${a.clockOutAt ? fmtTime(a.clockOutAt) : 'berlangsung...'} · ${fmtDurShort((a.clockOutAt ?? Date.now()) - a.clockInAt)} · ${fmtKm(polylineKm(a.route))}`}
-            trailing={<StatusBadge label={a.geoFenceOk ? 'OK' : 'Exception'} color={a.geoFenceOk ? C.ok : C.accent} icon={a.geoFenceOk ? 'checkmark-circle' : 'warning'} />}
+            trailing={<GeoValidBadge ok={a.geoFenceOk} okLabel="OK" badLabel="Exception" />}
             emphasis={a.clockOutAt ? undefined : { color: C.warn, label: 'Berlangsung' }}
           />
         )}

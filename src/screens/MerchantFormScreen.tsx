@@ -75,7 +75,7 @@ export default function MerchantFormScreen() {
   };
 
   return (
-    <ScrollView contentContainerStyle={{ padding: 16, gap: 12, maxWidth: 640, width: '100%', alignSelf: 'center' }}>
+    <ScrollView tabIndex={0} role="main" contentContainerStyle={{ padding: 16, gap: 12, maxWidth: 640, width: '100%', alignSelf: 'center' }}>
       <SectionHeader title={editing ? 'Edit Merchant' : 'Tambah Merchant'} />
       <Card style={{ gap: 12 }}>
         <Field label="Nama Merchant *">

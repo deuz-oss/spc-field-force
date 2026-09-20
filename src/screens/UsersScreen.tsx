@@ -1,9 +1,9 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { ScrollView, Switch, Text, TouchableOpacity, View } from 'react-native';
 import { Badge, Btn, Card, Chip, Field, Input, Muted, SectionHeader, StatusBadge } from '../components/ui';
 import { showDialog } from '../components/dialog';
 import { ROLE_LABEL } from '../config';
-import { C } from '../theme';
+import { C, F } from '../theme';
 import { useCurrentUser, useStore } from '../store/useStore';
 import { Role } from '../types';
 
@@ -46,6 +46,20 @@ export default function UsersScreen() {
   const [showTeam, setShowTeam] = useState(false);
   const [tName, setTName] = useState('');
   const [tCity, setTCity] = useState('');
+
+  // pencarian & filter pengguna
+  const [q, setQ] = useState('');
+  const [roleFilter, setRoleFilter] = useState<Role | 'all'>('all');
+
+  const filteredUsers = useMemo(() => {
+    let l = users;
+    if (roleFilter !== 'all') l = l.filter((u) => u.role === roleFilter);
+    if (q.trim()) {
+      const s = q.trim().toLowerCase();
+      l = l.filter((u) => u.name.toLowerCase().includes(s) || u.username.toLowerCase().includes(s));
+    }
+    return l;
+  }, [users, roleFilter, q]);
 
   if (me.role !== 'super_admin') {
     return (
@@ -115,6 +129,8 @@ export default function UsersScreen() {
 
   return (
     <ScrollView
+      tabIndex={0}
+      role="main"
       contentContainerStyle={{ padding: 16, gap: 12, maxWidth: 900, width: '100%', alignSelf: 'center' }}
       keyboardShouldPersistTaps="handled"
     >
@@ -123,6 +139,15 @@ export default function UsersScreen() {
         subtitle={`${activeCount} aktif · ${users.length - activeCount} nonaktif`}
         action={{ label: showForm ? 'Tutup' : '+ Pengguna', onPress: () => setShowForm(!showForm) }}
       />
+
+      <Input placeholder="Cari nama / username..." value={q} onChangeText={setQ} />
+      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
+        <Chip label="Semua" active={roleFilter === 'all'} onPress={() => setRoleFilter('all')} />
+        {ALL_ROLES.map((r) => (
+          <Chip key={r} label={ROLE_LABEL[r]} active={roleFilter === r} onPress={() => setRoleFilter(r)} />
+        ))}
+      </View>
+      <Muted>{filteredUsers.length} pengguna ditemukan</Muted>
 
       {showForm && (
         <Card style={{ gap: 10 }}>
@@ -158,16 +183,20 @@ export default function UsersScreen() {
         </Card>
       )}
 
-      {users.map((u) => {
+      {filteredUsers.map((u) => {
         const editing = editId === u.id;
         return (
           <Card key={u.id}>
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
               <View style={{ flexShrink: 1 }}>
-                <Text style={{ fontWeight: '700', color: C.text }}>{u.name}</Text>
+                <Text style={{ fontFamily: F.bold, color: C.text }}>{u.name}</Text>
                 <Muted>@{u.username}</Muted>
               </View>
-              <Switch value={u.active} onValueChange={() => toggleUserActive(u.id)} />
+              <Switch
+                value={u.active}
+                onValueChange={() => toggleUserActive(u.id)}
+                aria-label={`Status akun ${u.name}`}
+              />
             </View>
             <View style={{ flexDirection: 'row', gap: 6, marginTop: 8, flexWrap: 'wrap', alignItems: 'center' }}>
               <Badge label={ROLE_LABEL[u.role]} color={ROLE_COLOR[u.role]} />
@@ -212,10 +241,10 @@ export default function UsersScreen() {
             ) : (
               <View style={{ flexDirection: 'row', gap: 14, marginTop: 10 }}>
                 <TouchableOpacity onPress={() => startEdit(u.id, u.role, u.teamId)}>
-                  <Text style={{ color: C.primary, fontWeight: '700', fontSize: 13 }}>Atur Akses</Text>
+                  <Text style={{ color: C.primaryText, fontFamily: F.bold, fontSize: 13 }}>Atur Akses</Text>
                 </TouchableOpacity>
                 <TouchableOpacity onPress={() => resetPassword(u.username)}>
-                  <Text style={{ color: C.accent, fontWeight: '700', fontSize: 13 }}>Reset Password</Text>
+                  <Text style={{ color: C.accent, fontFamily: F.bold, fontSize: 13 }}>Reset Password</Text>
                 </TouchableOpacity>
               </View>
             )}
@@ -255,7 +284,7 @@ export default function UsersScreen() {
 
       {teams.map((t) => (
         <Card key={t.id}>
-          <Text style={{ fontWeight: '700', color: C.text }}>{t.name}</Text>
+          <Text style={{ fontFamily: F.bold, color: C.text }}>{t.name}</Text>
           <Muted>
             {t.city} · radius geo-fence {t.radiusKm} km · {users.filter((u) => u.teamId === t.id).length} anggota
           </Muted>

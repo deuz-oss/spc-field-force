@@ -1,10 +1,10 @@
 import React, { useMemo, useState } from 'react';
-import { Alert, ScrollView, Text, View } from 'react-native';
+import { ScrollView, Text, View } from 'react-native';
 import { PeriodPicker } from '../components/PeriodPicker';
 import { showDialog } from '../components/dialog';
-import { Btn, Card, Chip, H, Muted } from '../components/ui';
+import { Btn, Card, Chip, Divider, H, Muted } from '../components/ui';
 import { INCENTIVE_CAP_PCT, OPTION3, RESULT_LABEL, STATUS_LABEL, TIER_LABEL, MONITOR_ROLES } from '../config';
-import { C } from '../theme';
+import { C, F } from '../theme';
 import { scopeUsers, useCurrentUser, useStore } from '../store/useStore';
 import {
   fmtDate,
@@ -31,17 +31,41 @@ function Line({
 }) {
   return (
     <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-      <Text style={{ color: C.muted, fontSize: 13 }}>{label}</Text>
+      <Text style={{ color: C.muted, fontSize: 13, fontFamily: F.reg }}>{label}</Text>
       <Text
         style={{
-          color: bold ? C.primary : C.text,
+          color: bold ? C.primaryText : C.text,
           fontSize: 13,
-          fontWeight: bold ? '800' : muted ? '400' : '600',
+          fontFamily: bold ? F.xbold : muted ? F.reg : F.semi,
         }}
       >
         {value}
       </Text>
     </View>
+  );
+}
+
+/** Kartu ekspor generik — konsolidasi 3 kartu Absensi/Kunjungan/Merchant yang sebelumnya copy-paste. */
+function ExportCard({
+  title,
+  description,
+  countLabel,
+  children,
+}: {
+  title: string;
+  description: string;
+  countLabel?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <Card>
+      <H>{title}</H>
+      <Muted style={{ marginTop: 2 }}>{description}</Muted>
+      {countLabel ? (
+        <Text style={{ color: C.muted, fontSize: 12.5, fontFamily: F.semi, marginTop: 6 }}>{countLabel}</Text>
+      ) : null}
+      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 10 }}>{children}</View>
+    </Card>
   );
 }
 
@@ -206,7 +230,7 @@ export default function ReportsScreen() {
   }, [visits, scopedUserIds, users, range, teams, teamId]);
 
   return (
-    <ScrollView contentContainerStyle={{ padding: 16, gap: 12, maxWidth: 900, width: '100%', alignSelf: 'center' }}>
+    <ScrollView tabIndex={0} role="main" contentContainerStyle={{ padding: 16, gap: 12, maxWidth: 900, width: '100%', alignSelf: 'center' }}>
       <H>Laporan</H>
       <PeriodPicker period={period} month={month} onPeriod={setPeriod} onMonth={setMonth} />
 
@@ -219,46 +243,33 @@ export default function ReportsScreen() {
         </View>
       )}
 
-      <Card>
-        <H>Ekspor Absensi</H>
-        <Muted style={{ marginTop: 2 }}>
-          Rekap clock in/out, durasi kerja, jarak rute, dan kepatuhan geo-fence.
-        </Muted>
-        <Muted style={{ marginTop: 6, fontWeight: '600' }}>
-          {attendances.filter((a) => scopedUserIds.has(a.userId) && inRange(a.clockInAt, range)).length} baris pada periode terpilih
-        </Muted>
-        <View style={{ marginTop: 8 }}>
-          <Btn small variant="outline" title="Unduh CSV Absensi" onPress={exportAttendance} />
-        </View>
-      </Card>
+      <ExportCard
+        title="Ekspor Absensi"
+        description="Rekap clock in/out, durasi kerja, jarak rute, dan kepatuhan geo-fence."
+        countLabel={`${attendances.filter((a) => scopedUserIds.has(a.userId) && inRange(a.clockInAt, range)).length} baris pada periode terpilih`}
+      >
+        <Btn small variant="outline" title="Unduh CSV Absensi" onPress={exportAttendance} />
+      </ExportCard>
 
-      <Card>
-        <H>Ekspor Kunjungan</H>
-        <Muted style={{ marginTop: 2 }}>
-          Detail semua visit termasuk bukti foto/dokumen dan validitas geo.
-        </Muted>
-        <Muted style={{ marginTop: 6, fontWeight: '600' }}>
-          {visits.filter((v) => scopedUserIds.has(v.agentId) && inRange(v.checkInAt, range)).length} baris pada periode terpilih
-        </Muted>
-        <View style={{ marginTop: 8 }}>
-          <Btn small variant="outline" title="Unduh CSV Kunjungan" onPress={exportVisits} />
-        </View>
-      </Card>
+      <ExportCard
+        title="Ekspor Kunjungan"
+        description="Detail semua visit termasuk bukti foto/dokumen dan validitas geo."
+        countLabel={`${visits.filter((v) => scopedUserIds.has(v.agentId) && inRange(v.checkInAt, range)).length} baris pada periode terpilih`}
+      >
+        <Btn small variant="outline" title="Unduh CSV Kunjungan" onPress={exportVisits} />
+      </ExportCard>
 
-      <Card>
-        <H>Ekspor Merchant</H>
-        <Muted style={{ marginTop: 2 }}>
-          Daftar merchant sesuai status terkini ({fmtNum(
-            merchants.filter((m) => (MONITOR_ROLES.includes(me.role) ? true : m.teamId === me.teamId)).length,
-          )} total di lingkup Anda).
-        </Muted>
-        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 10 }}>
-          <Btn small variant="outline" title="Registered" onPress={exportMerchantsByStatus(['registered'], 'merchant_registered')} />
-          <Btn small variant="outline" title="Activated" onPress={exportMerchantsByStatus(['activated'], 'merchant_activated')} />
-          <Btn small variant="outline" title="Cold Start" onPress={exportMerchantsByStatus(['cold_start'], 'merchant_cold_start')} />
-          <Btn small variant="outline" title="Semua Status" onPress={exportMerchantsByStatus(['cold_start', 'registered', 'activated'], 'merchant_semua')} />
-        </View>
-      </Card>
+      <ExportCard
+        title="Ekspor Merchant"
+        description={`Daftar merchant sesuai status terkini (${fmtNum(
+          merchants.filter((m) => (MONITOR_ROLES.includes(me.role) ? true : m.teamId === me.teamId)).length,
+        )} total di lingkup Anda).`}
+      >
+        <Btn small variant="outline" title="Registered" onPress={exportMerchantsByStatus(['registered'], 'merchant_registered')} />
+        <Btn small variant="outline" title="Activated" onPress={exportMerchantsByStatus(['activated'], 'merchant_activated')} />
+        <Btn small variant="outline" title="Cold Start" onPress={exportMerchantsByStatus(['cold_start'], 'merchant_cold_start')} />
+        <Btn small variant="outline" title="Semua Status" onPress={exportMerchantsByStatus(['cold_start', 'registered', 'activated'], 'merchant_semua')} />
+      </ExportCard>
 
       {me.role === 'super_admin' && (
         <Card>
@@ -278,7 +289,7 @@ export default function ReportsScreen() {
               value={fmtIDR(billing.activationCount * billing.rates.activationFee)}
             />
             <Line label="Insentif (cap 50% base)" value={`max ${fmtIDR(billing.incentiveCap)}`} muted />
-            <View style={{ height: 1, backgroundColor: C.border }} />
+            <Divider style={{ marginVertical: 2 }} />
             <Line
               label="Total (belum termasuk insentif)"
               value={fmtIDR(billing.base + billing.caseFees)}

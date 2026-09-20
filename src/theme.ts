@@ -1,33 +1,38 @@
-import { StyleSheet } from 'react-native';
-
 /**
  * Design tokens — SPC Field Force
- * Sumber: ui-ux-pro-max design-system (enterprise workforce SaaS)
- * Style: Flat/clean SaaS, density dashboard (8/10), motion subtle (3/10)
- * Palet: Trust Blue #2563EB + slate netral + aksen semantik AA (kontras ≥4.5:1 di atas putih)
+ * Per user-provided design.md (2026-09-20): Trust Blue primary on a cool
+ * slate neutral scale, deep-slate chrome, Plus Jakarta Sans everywhere
+ * (no separate mono numeral font — tabular alignment via fontVariant),
+ * 16/12/12 card/input/button radius, and the doc's Level 1/3 shadow specs.
+ * Spacing scale already matched the doc's space-* tokens exactly, unchanged.
+ * Contrast: semantic colors kept AA (≥4.5:1) against their expected background.
  */
 
 export const C = {
-  // Brand
+  // Brand — Trust Blue, paired with white text/icons on top (unlike the
+  // previous gold, #2563EB passes AA as text-on-white directly at ~5.17:1,
+  // so `primaryText` doesn't need a separately darkened shade here).
   primary: '#2563EB',
-  primaryDark: '#1D4ED8',
-  onPrimary: '#FFFFFF',
+  primaryDark: '#1D4ED8', // pressed state
+  primaryText: '#2563EB',
+  onPrimary: '#FFFFFF', // text/icon color to place ON a primary-colored surface
 
-  // Netral (slate)
+  // Neutral — cool slate
   bg: '#F8FAFC',
   card: '#FFFFFF',
   surfaceElevated: '#FFFFFF',
-  railBg: '#0F172A', // side-rail nav (web/tablet) — dark, tetap dalam keluarga slate
+  railBg: '#0F172A', // side-rail nav (web/tablet) — deep slate
   text: '#1E293B',
   muted: '#475569',
   faint: '#94A3B8',
   border: '#E2E8F0',
   borderStrong: '#CBD5E1',
-  divider: '#EDF2F7',
-  overlay: 'rgba(15,23,42,.45)',
+  divider: '#F1F5F9',
+  overlay: 'rgba(15, 23, 42, 0.45)',
   focus: '#2563EB',
 
-  // Semantik (teks & fill lolos kontras di atas putih)
+  // Semantik — status warna tetap konvensional (hijau/oranye/biru/merah)
+  // supaya tidak bentrok dengan brand; hanya brand yang pindah, bukan makna status.
   ok: '#15803D',
   warn: '#B45309',
   info: '#0369A1',
@@ -40,34 +45,17 @@ export const C = {
   warnBg: '#FEF3C7',
   infoBg: '#DBEAFE',
   dangerBg: '#FEE2E2',
-  surfaceAlt: '#EFF6FF', // kartu terpilih / highlight biru muda
+  surfaceAlt: '#EFF6FF', // kartu terpilih / baris aktif
 };
 
-/** Alias semantik generik (brief: background/surface/textPrimary/...) di atas palet C di atas */
-export const SEMANTIC = {
-  background: C.bg,
-  surface: C.card,
-  surfaceElevated: C.surfaceElevated,
-  textPrimary: C.text,
-  textSecondary: C.muted,
-  textMuted: C.faint,
-  border: C.border,
-  brand: C.primary,
-  brandStrong: C.primaryDark,
-  success: C.ok,
-  warning: C.warn,
-  danger: C.accent,
-  info: C.info,
-} as const;
-
-/** Warna status merchant — dipakai Badge (teks berwarna di atas tint 10%) */
+/** Warna status merchant — dipakai Badge (teks berwarna di atas tint ~3%, lihat ui.tsx) */
 export const STATUS_COLOR = {
   cold_start: C.warn,
   registered: C.info,
   activated: C.ok,
 } as const;
 
-/** Font Plus Jakarta Sans (@expo-google-fonts) */
+/** Font: Plus Jakarta Sans di semua tier (per design.md) — angka tabular pakai fontVariant, bukan font terpisah. */
 export const F = {
   reg: 'PlusJakartaSans_400Regular',
   semi: 'PlusJakartaSans_600SemiBold',
@@ -89,13 +77,24 @@ export const T = {
     fontFamily: F.semi,
     letterSpacing: 0.6,
     textTransform: 'uppercase',
+    color: C.muted,
   } as const,
   label: { fontSize: 12.5, lineHeight: 16, fontFamily: F.semi, color: C.text } as const,
-  /** angka besar di KPI/metric card — tabular agar sejajar saat berubah */
+  /** angka besar di KPI/metric card — mono tabular agar sejajar saat berubah */
   metric: {
     fontSize: 26,
     lineHeight: 32,
     fontFamily: F.xbold,
+    color: C.text,
+    letterSpacing: -0.3,
+    fontVariant: ['tabular-nums'] as any,
+  },
+  /** timer absensi/kunjungan aktif — angka besar, dipisah dari `display` (dipakai brand title Login) */
+  timer: {
+    fontSize: 30,
+    lineHeight: 36,
+    fontFamily: F.xbold,
+    color: C.primaryDark,
     letterSpacing: -0.3,
     fontVariant: ['tabular-nums'] as any,
   },
@@ -110,7 +109,7 @@ export const SP = {
   xl: 24,
 } as const;
 
-/** Radius — sengaja dibatasi 3 nilai agar konsisten */
+/** Radius — per design.md Shapes (card 16 / input & tombol 12); rail nav tetap 10 (hardcoded di App.tsx, sudah sesuai) */
 export const R = {
   card: 16,
   input: 12,
@@ -125,45 +124,15 @@ const shadowCard = {
   elevation: 1,
 };
 
-/** Elevasi — dipakai sadar, hindari shadow berlebihan (brief §13) */
+/** Elevasi — Level 1 (card) & Level 3 (modal) per design.md Elevation & Depth */
 export const ELEV = {
   0: {},
   1: shadowCard,
   2: {
     shadowColor: '#0F172A',
-    shadowOpacity: 0.1,
-    shadowRadius: 20,
-    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.15,
+    shadowRadius: 24,
+    shadowOffset: { width: 0, height: 8 },
     elevation: 6,
   },
-} as const;
-
-export const S = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: C.bg },
-  content: { padding: SP.lg, paddingBottom: 40, gap: SP.md },
-  card: {
-    backgroundColor: C.card,
-    borderRadius: R.card,
-    padding: SP.lg,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: C.border,
-    ...shadowCard,
-  },
-  h1: { fontSize: 22, fontWeight: '800', color: C.text },
-  h2: { fontSize: 15, fontWeight: '700', color: C.text },
-  muted: { color: C.muted, fontSize: 12.5 },
-  row: { flexDirection: 'row', alignItems: 'center' },
-  between: { justifyContent: 'space-between' },
-  wrap: { flexWrap: 'wrap', gap: SP.sm },
-});
-
-export const inputStyle = {
-  backgroundColor: C.card,
-  borderWidth: 1,
-  borderColor: C.border,
-  borderRadius: R.input,
-  paddingHorizontal: SP.md,
-  paddingVertical: 12,
-  fontSize: 14.5,
-  color: C.text,
 } as const;

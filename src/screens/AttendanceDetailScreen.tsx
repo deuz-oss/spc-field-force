@@ -2,7 +2,7 @@ import React from 'react';
 import { ScrollView, View } from 'react-native';
 import { useRoute } from '@react-navigation/native';
 import { LeafletMap, MapMarker, MapPlaceholder } from '../components/LeafletMap';
-import { Card, ListRow, Muted, SectionHeader, StatusBadge } from '../components/ui';
+import { Card, GeoValidBadge, ListRow, Muted, SectionHeader, StatusBadge } from '../components/ui';
 import { C } from '../theme';
 import { VISIT_VALID_RADIUS_M, STOP_FLAG_DURATION_MS } from '../config';
 import { useStore } from '../store/useStore';
@@ -37,15 +37,11 @@ export default function AttendanceDetailScreen() {
   const stops = detectStops(a.route);
 
   return (
-    <ScrollView contentContainerStyle={{ padding: 16, gap: 12, maxWidth: 900, width: '100%', alignSelf: 'center' }}>
+    <ScrollView tabIndex={0} role="main" contentContainerStyle={{ padding: 16, gap: 12, maxWidth: 900, width: '100%', alignSelf: 'center' }}>
       <Card>
         <SectionHeader title={`Absensi ${user?.name ?? ''}`} />
         <View style={{ marginTop: 8 }}>
-          <StatusBadge
-            label={a.geoFenceOk ? 'Geo-fence OK' : 'Pengecualian'}
-            color={a.geoFenceOk ? C.ok : C.accent}
-            icon={a.geoFenceOk ? 'shield-checkmark' : 'warning'}
-          />
+          <GeoValidBadge ok={a.geoFenceOk} okLabel="Geo-fence OK" badLabel="Pengecualian" />
         </View>
         <Muted style={{ marginTop: 10 }}>Clock in : {fmtDateTime(a.clockInAt)}</Muted>
         <Muted>Clock out: {fmtDateTime(a.clockOutAt)}</Muted>

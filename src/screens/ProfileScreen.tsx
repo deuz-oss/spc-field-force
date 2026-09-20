@@ -4,7 +4,7 @@ import * as IntentLauncher from 'expo-intent-launcher';
 import { Badge, Btn, Card, H, KPICard, Muted, SectionHeader } from '../components/ui';
 import { showDialog } from '../components/dialog';
 import { APP_NAME, ROLE_LABEL } from '../config';
-import { C } from '../theme';
+import { C, F } from '../theme';
 import { useCurrentUser, useStore } from '../store/useStore';
 import { fmtDurShort, fmtKm, MONTHS_ID } from '../utils/format';
 import { polylineKm } from '../utils/geo';
@@ -36,7 +36,7 @@ export default function ProfileScreen() {
   const isFieldRole = FIELD_ROLES.includes(me.role);
 
   return (
-    <ScrollView contentContainerStyle={{ padding: 16, gap: 12, maxWidth: 720, width: '100%', alignSelf: 'center' }}>
+    <ScrollView tabIndex={0} role="main" contentContainerStyle={{ padding: 16, gap: 12, maxWidth: 720, width: '100%', alignSelf: 'center' }}>
       <Card>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
           <View
@@ -49,21 +49,18 @@ export default function ProfileScreen() {
               justifyContent: 'center',
             }}
           >
-            <Text style={{ color: '#fff', fontSize: 22, fontWeight: '900' }}>
+            <Text style={{ color: C.onPrimary, fontSize: 22, fontFamily: F.xbold }}>
               {me.name.charAt(0).toUpperCase()}
             </Text>
           </View>
           <View style={{ flexShrink: 1 }}>
-            <Text style={{ fontSize: 17, fontWeight: '800', color: C.text }}>{me.name}</Text>
+            <Text style={{ fontSize: 17, fontFamily: F.xbold, color: C.text }}>{me.name}</Text>
             <Muted>@{me.username}</Muted>
             {team ? <Muted>Tim {team.name}</Muted> : null}
           </View>
         </View>
         <View style={{ flexDirection: 'row', gap: 6, marginTop: 10, flexWrap: 'wrap' }}>
-          <Badge label={ROLE_LABEL[me.role]} color={C.primary} />
-          {me.role === 'field_agent' && (
-            <Badge label="Option 3 · Acquisition + Incubation" color={C.purple} />
-          )}
+          <Badge label={ROLE_LABEL[me.role]} color={C.primaryText} />
         </View>
       </Card>
 
@@ -139,7 +136,7 @@ function InfoLine({ label, value }: { label: string; value: string }) {
   return (
     <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
       <Muted>{label}</Muted>
-      <Text style={{ color: C.text, fontWeight: '700', fontSize: 13 }}>{value}</Text>
+      <Text style={{ color: C.text, fontFamily: F.bold, fontSize: 13 }}>{value}</Text>
     </View>
   );
 }

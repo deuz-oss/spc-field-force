@@ -6,8 +6,10 @@ import {
   Badge,
   Btn,
   Card,
+  Chip,
   Empty,
   FunnelChart,
+  GeoValidBadge,
   H,
   KPICard,
   ListRow,
@@ -17,7 +19,7 @@ import {
   StatusBadge,
 } from '../components/ui';
 import { showDialog } from '../components/dialog';
-import { C, STATUS_COLOR, T } from '../theme';
+import { C, F, STATUS_COLOR, T } from '../theme';
 import { STATUS_LABEL } from '../config';
 import { merchantScope, scopeUsers, useCurrentUser, useStore } from '../store/useStore';
 import { Merchant, MerchantStatus, User } from '../types';
@@ -124,11 +126,7 @@ function ClockCard({ me }: { me: User }) {
       <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
         <H>Absensi</H>
         {active && (
-          <StatusBadge
-            label={active.geoFenceOk ? 'Dalam geo-fence' : 'Pengecualian geo-fence'}
-            color={active.geoFenceOk ? C.ok : C.accent}
-            icon={active.geoFenceOk ? 'shield-checkmark' : 'warning'}
-          />
+          <GeoValidBadge ok={active.geoFenceOk} okLabel="Dalam geo-fence" badLabel="Pengecualian geo-fence" />
         )}
       </View>
       {!active ? (
@@ -142,7 +140,7 @@ function ClockCard({ me }: { me: User }) {
         </>
       ) : (
         <>
-          <Text style={[T.display, { color: C.primary, marginTop: 4 }]}>{fmtDurClock(now - active.clockInAt)}</Text>
+          <Text style={[T.timer, { marginTop: 4 }]}>{fmtDurClock(now - active.clockInAt)}</Text>
           <Text style={{ color: C.muted, fontSize: 12, marginBottom: 8 }}>
             Masuk pukul{' '}
             {new Date(active.clockInAt).toLocaleTimeString('id-ID', {
@@ -166,7 +164,10 @@ export default function DashboardScreen() {
   const attendances = useStore((s) => s.attendances);
   const teams = useStore((s) => s.teams);
 
-  const [period, setPeriod] = useState<PeriodKey>('daily');
+  // Defaults to weekly, not daily — on a typical dataset "today" alone renders
+  // as an uninformative wall of zeros/em-dashes; weekly is the first view
+  // that actually shows something a manager can act on.
+  const [period, setPeriod] = useState<PeriodKey>('weekly');
   const [month, setMonth] = useState(new Date().getMonth());
   const [sortKey, setSortKey] = useState<SortKey>('visits');
   const [openAgent, setOpenAgent] = useState<string | null>(null);
@@ -283,7 +284,7 @@ export default function DashboardScreen() {
   }
 
   return (
-    <ScrollView contentContainerStyle={{ padding: 16, gap: 12, maxWidth: 1180, width: '100%', alignSelf: 'center' }}>
+    <ScrollView tabIndex={0} role="main" contentContainerStyle={{ padding: 16, gap: 12, maxWidth: 1180, width: '100%', alignSelf: 'center' }}>
       {headerAndPeriod}
 
       <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>
@@ -294,7 +295,7 @@ export default function DashboardScreen() {
           status={scopeIds.size === 0 ? 'neutral' : activeAgents / Math.max(1, scopeIds.size) >= 0.8 ? 'ok' : 'warn'}
         />
         <KPICard
-          title="Geo-fence Compliance"
+          title="Geo-fence"
           value={fencePct == null ? '—' : `${fencePct}%`}
           target={`Target ≥${TARGETS.fencePct}%`}
           status={fencePct == null ? 'neutral' : fencePct >= TARGETS.fencePct ? 'ok' : fencePct >= TARGETS.fencePct - 10 ? 'warn' : 'danger'}
@@ -368,9 +369,9 @@ export default function DashboardScreen() {
 
         {kpiStats.length > 1 && (
           <View style={{ flexDirection: 'row', gap: 6, marginTop: 10 }}>
-            <SortChip label="Urut Kunjungan" active={sortKey === 'visits'} onPress={() => setSortKey('visits')} />
-            <SortChip label="Jam Kerja" active={sortKey === 'hours'} onPress={() => setSortKey('hours')} />
-            <SortChip label="Aktivasi" active={sortKey === 'activated'} onPress={() => setSortKey('activated')} />
+            <Chip label="Urut Kunjungan" active={sortKey === 'visits'} onPress={() => setSortKey('visits')} />
+            <Chip label="Jam Kerja" active={sortKey === 'hours'} onPress={() => setSortKey('hours')} />
+            <Chip label="Aktivasi" active={sortKey === 'activated'} onPress={() => setSortKey('activated')} />
           </View>
         )}
 
@@ -381,7 +382,7 @@ export default function DashboardScreen() {
             .sort((a, b) => sortVal(b, sortKey) - sortVal(a, sortKey));
           return (
             <View key={g.title} style={{ marginTop: 12 }}>
-              <Text style={{ fontSize: 13, fontWeight: '700', color: C.muted }}>{g.title}</Text>
+              <Text style={{ fontSize: 13, fontFamily: F.bold, color: C.muted }}>{g.title}</Text>
               {stats.length === 0 ? (
                 <Empty text="Belum ada anggota." />
               ) : (
@@ -443,7 +444,7 @@ export default function DashboardScreen() {
                               color={passFailColor(s.validVisitPct != null && s.validVisitPct >= TARGETS.validVisitPct)}
                             />
 
-                            <Muted style={{ marginTop: 12, fontWeight: '600' }}>Funnel individu:</Muted>
+                            <Text style={[T.label, { color: C.muted, marginTop: 12 }]}>Funnel individu:</Text>
                             <View style={{ marginTop: 8 }}>
                               <FunnelChart steps={FUNNEL_STEPS.map((label, i) => ({ label: shortStep(label), value: s.funnel[i] }))} />
                             </View>
@@ -484,7 +485,7 @@ function FieldAgentDashboard({
   }, [merchantScopeList]);
 
   return (
-    <ScrollView contentContainerStyle={{ padding: 16, gap: 12 }}>
+    <ScrollView tabIndex={0} role="main" contentContainerStyle={{ padding: 16, gap: 12, maxWidth: 1180, width: '100%', alignSelf: 'center' }}>
       {header}
 
       <ClockCard me={me} />
@@ -550,23 +551,4 @@ function shortStep(step: string): string {
     'Cold Start Selesai': 'CS',
   };
   return map[step] ?? step;
-}
-
-function SortChip({ label, active, onPress }: { label: string; active: boolean; onPress: () => void }) {
-  return (
-    <TouchableOpacity
-      onPress={onPress}
-      activeOpacity={0.7}
-      style={{
-        paddingHorizontal: 10,
-        paddingVertical: 6,
-        borderRadius: 999,
-        backgroundColor: active ? C.primary : C.card,
-        borderWidth: 1,
-        borderColor: active ? C.primary : C.border,
-      }}
-    >
-      <Text style={{ fontSize: 11, fontWeight: '600', color: active ? '#fff' : C.text }}>{label}</Text>
-    </TouchableOpacity>
-  );
 }

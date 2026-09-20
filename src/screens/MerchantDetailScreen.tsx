@@ -2,10 +2,10 @@ import React, { useMemo, useState } from 'react';
 import { ScrollView, Text, TouchableOpacity, View } from 'react-native';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { LeafletMap, MapPlaceholder } from '../components/LeafletMap';
-import { Badge, Btn, Card, Chip, Empty, Field, H, Input, ListRow, Muted, SectionHeader } from '../components/ui';
+import { Badge, Btn, Card, Chip, Empty, GeoValidBadge, H, ListRow, Muted, SectionHeader, StickyFooter } from '../components/ui';
 import { STATUS_LABEL, TIER_LABEL, VISIT_VALID_RADIUS_M, MANAGER_ROLES } from '../config';
 import { showDialog } from '../components/dialog';
-import { C, STATUS_COLOR } from '../theme';
+import { C, F, STATUS_COLOR } from '../theme';
 import { useCurrentUser, useStore } from '../store/useStore';
 import { MerchantStatus } from '../types';
 import { fmtDateTime, fmtDurShort } from '../utils/format';
@@ -89,7 +89,20 @@ export default function MerchantDetailScreen() {
 
   return (
     <View style={{ flex: 1 }}>
-      <ScrollView contentContainerStyle={{ padding: 16, gap: 12, paddingBottom: me.role === 'field_agent' ? 100 : 24 }}>
+      <ScrollView
+        // makes the scroll container itself keyboard-focusable so arrow/Page keys
+        // can scroll it without a mouse/trackpad (axe: scrollable-region-focusable)
+        tabIndex={0}
+        role="main"
+        contentContainerStyle={{
+          padding: 16,
+          gap: 12,
+          paddingBottom: me.role === 'field_agent' ? 100 : 24,
+          maxWidth: 900,
+          width: '100%',
+          alignSelf: 'center',
+        }}
+      >
         <Card>
           <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
             <H style={{ fontSize: 17, flexShrink: 1 }}>{merchant.name}</H>
@@ -137,7 +150,7 @@ export default function MerchantDetailScreen() {
                   style={{ marginTop: 10 }}
                   onPress={() => upsertMerchant({ ...merchant, coldStartDone: true })}
                 >
-                  <Text style={{ color: C.ok, fontWeight: '700', fontSize: 13 }}>Tandai Cold Start Complete</Text>
+                  <Text style={{ color: C.ok, fontFamily: F.bold, fontSize: 13 }}>Tandai Cold Start Complete</Text>
                 </TouchableOpacity>
               )}
             </Card>
@@ -194,8 +207,15 @@ export default function MerchantDetailScreen() {
                   title={users.find((u) => u.id === v.agentId)?.name ?? v.agentId}
                   subtitle={
                     v.checkOutAt
-                      ? `Selesai · durasi ${fmtDurShort(v.checkOutAt - v.checkInAt)} · ${v.geoValid ? 'geo valid' : `di luar radius ${v.merchantDistanceM ?? '?'}m`}`
-                      : `Berlangsung (belum check-out) · ${v.geoValid ? 'geo valid' : `di luar radius ${v.merchantDistanceM ?? '?'}m`}`
+                      ? `Selesai · durasi ${fmtDurShort(v.checkOutAt - v.checkInAt)}`
+                      : 'Berlangsung (belum check-out)'
+                  }
+                  trailing={
+                    <GeoValidBadge
+                      ok={v.geoValid}
+                      okLabel="Geo valid"
+                      badLabel={`${v.merchantDistanceM ?? '?'}m`}
+                    />
                   }
                   meta={fmtDateTime(v.checkInAt)}
                 />
@@ -206,21 +226,9 @@ export default function MerchantDetailScreen() {
       </ScrollView>
 
       {me.role === 'field_agent' && (
-        <View
-          style={{
-            position: 'absolute',
-            left: 0,
-            right: 0,
-            bottom: 0,
-            padding: 16,
-            paddingTop: 10,
-            backgroundColor: C.card,
-            borderTopWidth: 1,
-            borderColor: C.border,
-          }}
-        >
+        <StickyFooter>
           <Btn title={openVisit ? 'Lanjutkan Kunjungan (check-in aktif)' : `CHECK IN di ${merchant.name}`} onPress={beginVisit} />
-        </View>
+        </StickyFooter>
       )}
     </View>
   );

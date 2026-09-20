@@ -1,5 +1,5 @@
 import React from 'react';
-import { ActivityIndicator, Text, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Platform, Text, TouchableOpacity, View } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { useFonts } from 'expo-font';
 import {
@@ -13,13 +13,14 @@ import {
   DefaultTheme,
   NavigationContainer,
 } from '@react-navigation/native';
-import { createBottomTabNavigator, BottomTabBarProps } from '@react-navigation/bottom-tabs';
+import { createBottomTabNavigator, BottomTabBarProps, BottomTabHeaderProps } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
+import { Header, getHeaderTitle } from '@react-navigation/elements';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { APP_NAME, ROLE_LABEL } from './src/config';
-import { C, F } from './src/theme';
+import { C, F, T } from './src/theme';
 import { useBreakpoint } from './src/utils/responsive';
 import { DialogHost } from './src/components/dialog';
 import { useCurrentUser, useStore } from './src/store/useStore';
@@ -33,7 +34,9 @@ import MerchantFormScreen from './src/screens/MerchantFormScreen';
 import ImportScreen from './src/screens/ImportScreen';
 import VisitFlowScreen from './src/screens/VisitFlowScreen';
 import VisitsScreen from './src/screens/VisitsScreen';
+import VisitsGridScreen from './src/screens/VisitsGridScreen';
 import AttendanceScreen from './src/screens/AttendanceScreen';
+import AttendanceGridScreen from './src/screens/AttendanceGridScreen';
 import AttendanceDetailScreen from './src/screens/AttendanceDetailScreen';
 import ReportsScreen from './src/screens/ReportsScreen';
 import LiveMapScreen from './src/screens/LiveMapScreen';
@@ -48,7 +51,9 @@ const TAB_ICON: Record<string, keyof typeof Ionicons.glyphMap> = {
   Dashboard: 'grid-outline',
   Merchant: 'storefront-outline',
   Kunjungan: 'walk-outline',
+  'Kunjungan Tim': 'walk-outline',
   Absensi: 'time-outline',
+  'Absensi Tim': 'time-outline',
   Laporan: 'bar-chart-outline',
   'Peta Live': 'navigate-outline',
   Pengguna: 'people-outline',
@@ -56,8 +61,9 @@ const TAB_ICON: Record<string, keyof typeof Ionicons.glyphMap> = {
 };
 
 const RAIL_WIDTH = 232;
+const COMPACT_RAIL_WIDTH = 76;
 
-/** Kartu identitas ringkas di puncak rail (web/tablet) — memberi konteks "siapa saya & di mana" */
+/** Kartu identitas ringkas di puncak rail penuh (desktop) — memberi konteks "siapa saya & di mana" */
 function RailHeader({ me }: { me: User }) {
   return (
     <View style={{ paddingHorizontal: 18, paddingTop: 22, paddingBottom: 16 }}>
@@ -72,7 +78,7 @@ function RailHeader({ me }: { me: User }) {
             justifyContent: 'center',
           }}
         >
-          <Ionicons name="footsteps" size={18} color="#fff" />
+          <Ionicons name="footsteps" size={18} color={C.onPrimary} />
         </View>
         <Text style={{ color: '#fff', fontFamily: F.xbold, fontSize: 15 }}>{APP_NAME}</Text>
       </View>
@@ -88,13 +94,26 @@ function RailHeader({ me }: { me: User }) {
   );
 }
 
-/** Tab bar responsif: rail vertikal tetap di web/tablet lebar (≥900dp), bottom tabs di mobile. */
-function ResponsiveTabBar({ state, navigation, isDesktop, me }: BottomTabBarProps & { isDesktop: boolean; me: User }) {
+/**
+ * Tab bar responsif — 3 mode:
+ * - mobile (<700dp): bottom tabs berlabel
+ * - tablet (700–899dp): rail vertikal ringkas, ikon saja (dulu ikut mode mobile — buang-buang lebar layar)
+ * - desktop (≥900dp): rail vertikal penuh berlabel + identitas pengguna
+ */
+function ResponsiveTabBar({
+  state,
+  navigation,
+  isTablet,
+  isDesktop,
+  me,
+}: BottomTabBarProps & { isTablet: boolean; isDesktop: boolean; me: User }) {
   const routes = state.routes;
 
-  if (!isDesktop) {
+  if (!isTablet) {
     return (
       <View
+        role="navigation"
+        aria-label="Navigasi utama"
         style={{
           flexDirection: 'row',
           borderTopWidth: 1,
@@ -106,7 +125,7 @@ function ResponsiveTabBar({ state, navigation, isDesktop, me }: BottomTabBarProp
       >
         {routes.map((route, i) => {
           const focused = state.index === i;
-          const color = focused ? C.primary : C.faint;
+          const color = focused ? C.primaryText : C.faint;
           return (
             <TouchableOpacity
               key={route.key}
@@ -124,8 +143,72 @@ function ResponsiveTabBar({ state, navigation, isDesktop, me }: BottomTabBarProp
     );
   }
 
+  if (!isDesktop) {
+    // Tablet: compact icon-only rail — was previously the same cramped bottom bar as a phone.
+    return (
+      <View
+        role="navigation"
+        aria-label="Navigasi utama"
+        style={{
+          position: 'absolute',
+          left: 0,
+          top: 0,
+          bottom: 0,
+          width: COMPACT_RAIL_WIDTH,
+          backgroundColor: C.railBg,
+          alignItems: 'center',
+          paddingTop: 22,
+          gap: 4,
+        }}
+      >
+        <View
+          style={{
+            width: 34,
+            height: 34,
+            borderRadius: 10,
+            backgroundColor: C.primary,
+            alignItems: 'center',
+            justifyContent: 'center',
+            marginBottom: 18,
+          }}
+        >
+          <Ionicons name="footsteps" size={18} color={C.onPrimary} />
+        </View>
+        {routes.map((route, i) => {
+          const focused = state.index === i;
+          return (
+            <TouchableOpacity
+              key={route.key}
+              onPress={() => navigation.navigate(route.name)}
+              accessibilityRole="button"
+              accessibilityState={focused ? { selected: true } : {}}
+              style={{
+                width: 52,
+                height: 44,
+                borderRadius: 10,
+                alignItems: 'center',
+                justifyContent: 'center',
+                backgroundColor: focused ? 'rgba(255,255,255,0.08)' : 'transparent',
+                borderLeftWidth: 3,
+                borderLeftColor: focused ? C.primary : 'transparent',
+              }}
+            >
+              <Ionicons
+                name={TAB_ICON[route.name] ?? 'ellipse-outline'}
+                size={20}
+                color={focused ? C.primary : 'rgba(255,255,255,0.6)'}
+              />
+            </TouchableOpacity>
+          );
+        })}
+      </View>
+    );
+  }
+
   return (
     <View
+      role="navigation"
+      aria-label="Navigasi utama"
       style={{
         position: 'absolute',
         left: 0,
@@ -150,15 +233,17 @@ function ResponsiveTabBar({ state, navigation, isDesktop, me }: BottomTabBarProp
                 alignItems: 'center',
                 gap: 12,
                 paddingVertical: 11,
-                paddingHorizontal: 12,
+                paddingHorizontal: 10,
                 borderRadius: 10,
-                backgroundColor: focused ? 'rgba(37,99,235,0.22)' : 'transparent',
+                backgroundColor: focused ? 'rgba(255,255,255,0.07)' : 'transparent',
+                borderLeftWidth: 3,
+                borderLeftColor: focused ? C.primary : 'transparent',
               }}
             >
               <Ionicons
                 name={TAB_ICON[route.name] ?? 'ellipse-outline'}
                 size={19}
-                color={focused ? '#93B4FF' : 'rgba(255,255,255,0.6)'}
+                color={focused ? C.primary : 'rgba(255,255,255,0.6)'}
               />
               <Text
                 style={{
@@ -178,13 +263,14 @@ function ResponsiveTabBar({ state, navigation, isDesktop, me }: BottomTabBarProp
 }
 
 function MainTabs({ role, me }: { role: Role; me: User }) {
-  const { isDesktop } = useBreakpoint();
+  const { isTablet, isDesktop } = useBreakpoint();
+  const railWidth = isDesktop ? RAIL_WIDTH : isTablet ? COMPACT_RAIL_WIDTH : 0;
   const tabs =
     role === 'super_admin'
-      ? ['Dashboard', 'Merchant', 'Laporan', 'Peta Live', 'Pengguna', 'Profil']
+      ? ['Dashboard', 'Merchant', 'Kunjungan Tim', 'Laporan', 'Absensi Tim', 'Peta Live', 'Pengguna', 'Profil']
       : role === 'field_agent'
       ? ['Dashboard', 'Merchant', 'Kunjungan', 'Absensi', 'Profil']
-      : ['Dashboard', 'Merchant', 'Laporan', 'Peta Live', 'Profil']; // admin, team_lead, client
+      : ['Dashboard', 'Merchant', 'Kunjungan Tim', 'Laporan', 'Absensi Tim', 'Peta Live', 'Profil']; // admin, team_lead, client
 
   const screenFor = (name: string) => {
     switch (name) {
@@ -194,8 +280,12 @@ function MainTabs({ role, me }: { role: Role; me: User }) {
         return MerchantsScreen;
       case 'Kunjungan':
         return VisitsScreen;
+      case 'Kunjungan Tim':
+        return VisitsGridScreen;
       case 'Absensi':
         return AttendanceScreen;
+      case 'Absensi Tim':
+        return AttendanceGridScreen;
       case 'Laporan':
         return ReportsScreen;
       case 'Peta Live':
@@ -209,13 +299,20 @@ function MainTabs({ role, me }: { role: Role; me: User }) {
 
   return (
     <Tabs.Navigator
-      tabBar={(props) => <ResponsiveTabBar {...props} isDesktop={isDesktop} me={me} />}
+      tabBar={(props) => <ResponsiveTabBar {...props} isTablet={isTablet} isDesktop={isDesktop} me={me} />}
       screenOptions={({ route }) => ({
-        headerStyle: { backgroundColor: C.primary, shadowOpacity: 0, borderBottomWidth: 0 },
+        headerStyle: { backgroundColor: C.railBg, shadowOpacity: 0, borderBottomWidth: 0 },
         headerTintColor: '#FFFFFF',
         headerTitleStyle: { fontFamily: F.bold, fontSize: 17 },
         headerShadowVisible: false,
-        sceneStyle: isDesktop ? { marginLeft: RAIL_WIDTH } : undefined,
+        sceneStyle: railWidth ? { marginLeft: railWidth } : undefined,
+        // faithful copy of bottom-tabs' own default `header` (see BottomTabView.js),
+        // just wrapped in role="banner" so it counts as a landmark for axe's `region` rule
+        header: ({ layout, options, route: r }: BottomTabHeaderProps) => (
+          <View role="banner">
+            <Header {...options} layout={layout} title={getHeaderTitle(options, r.name)} />
+          </View>
+        ),
         headerRight: () => (
           <View
             style={{
@@ -261,6 +358,25 @@ export default function App() {
     useStore.getState().init();
   }, []);
 
+  React.useEffect(() => {
+    // @react-navigation/elements sets aria-hidden="true" on inactive tab
+    // screens (correctly shielding screen readers) but never pairs it with
+    // `inert`, so those screens' controls stay reachable by Tab even though
+    // they're invisible. Keep `inert` in sync with aria-hidden ourselves —
+    // web only, harmless no-op on native since aria-hidden/inert don't exist there.
+    if (Platform.OS !== 'web' || typeof document === 'undefined') return;
+    const sync = () => {
+      document.querySelectorAll('[aria-hidden="true"]:not([inert])').forEach((el) => el.setAttribute('inert', ''));
+      document.querySelectorAll('[inert]').forEach((el) => {
+        if (el.getAttribute('aria-hidden') !== 'true') el.removeAttribute('inert');
+      });
+    };
+    sync();
+    const observer = new MutationObserver(sync);
+    observer.observe(document.body, { attributes: true, attributeFilter: ['aria-hidden'], subtree: true });
+    return () => observer.disconnect();
+  }, []);
+
   if (!ready || !fontsLoaded)
     return (
       <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: C.bg }}>
@@ -274,20 +390,20 @@ export default function App() {
             justifyContent: 'center',
           }}
         >
-          <Ionicons name="footsteps" size={34} color="#FFFFFF" />
+          <Ionicons name="footsteps" size={34} color={C.onPrimary} />
         </View>
-        <Text style={{ fontSize: 22, fontWeight: '800', color: C.text, marginTop: 16 }}>{APP_NAME}</Text>
-        <ActivityIndicator style={{ marginTop: 14 }} color={C.primary} />
+        <Text style={[T.h1, { marginTop: 16 }]}>{APP_NAME}</Text>
+        <ActivityIndicator style={{ marginTop: 14 }} color={C.primaryDark} aria-label="Memuat aplikasi" />
       </View>
     );
 
   const navTheme = {
     ...DefaultTheme,
-    colors: { ...DefaultTheme.colors, primary: C.primary, background: C.bg, card: '#fff' },
+    colors: { ...DefaultTheme.colors, primary: C.primaryDark, background: C.bg, card: '#fff' },
   };
 
   const stackOpts = {
-    headerStyle: { backgroundColor: C.primary, shadowOpacity: 0, borderBottomWidth: 0 },
+    headerStyle: { backgroundColor: C.railBg, shadowOpacity: 0, borderBottomWidth: 0 },
     headerTintColor: '#FFFFFF',
     headerTitleStyle: { fontFamily: F.bold, fontSize: 17 },
     headerShadowVisible: false,

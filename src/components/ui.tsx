@@ -21,11 +21,7 @@ export function Card({ children, style }: { children: React.ReactNode; style?: o
           padding: SP.lg,
           borderWidth: StyleSheet.hairlineWidth,
           borderColor: C.border,
-          shadowColor: '#0F172A',
-          shadowOpacity: 0.05,
-          shadowRadius: 10,
-          shadowOffset: { width: 0, height: 4 },
-          elevation: 1,
+          ...ELEV[1],
         },
         style,
       ]}
@@ -36,11 +32,7 @@ export function Card({ children, style }: { children: React.ReactNode; style?: o
 }
 
 export function H({ children, style }: { children: React.ReactNode; style?: object }) {
-  return (
-    <Text style={{ fontSize: 16, lineHeight: 22, fontFamily: F.bold, color: C.text, ...style }}>
-      {children}
-    </Text>
-  );
+  return <Text style={[T.h2, style]}>{children}</Text>;
 }
 
 export function Muted({
@@ -53,10 +45,7 @@ export function Muted({
   numberOfLines?: number;
 }) {
   return (
-    <Text
-      numberOfLines={numberOfLines}
-      style={{ color: C.muted, fontSize: 12.5, lineHeight: 18, fontFamily: F.reg, ...style }}
-    >
+    <Text numberOfLines={numberOfLines} style={[T.small, style]}>
       {children}
     </Text>
   );
@@ -66,7 +55,10 @@ export function Badge({ label, color }: { label: string; color: string }) {
   return (
     <View
       style={{
-        backgroundColor: color + '1A',
+        // '1A' (~10% alpha) blended the text color's own tint enough to drop
+        // several status colors below the 4.5:1 AA threshold against it —
+        // '08' (~3%) keeps a visible tint with real contrast margin.
+        backgroundColor: color + '08',
         borderRadius: 999,
         paddingHorizontal: 9,
         paddingVertical: 4,
@@ -89,14 +81,16 @@ export function Chip({
   onPress?: () => void;
   color?: string;
 }) {
+  // `onPrimary` is the correct on-fill text color for the brand primary;
+  // other semantic fills (ok/warn/accent) use white directly.
+  const activeText = color === C.primary ? C.onPrimary : '#FFFFFF';
   return (
     <TouchableOpacity
       onPress={onPress}
       activeOpacity={0.7}
       accessibilityRole="button"
-      hitSlop={{ top: 6, bottom: 6 }}
       style={{
-        minHeight: 36,
+        minHeight: 44, // WCAG 2.5.5 / platform touch-target minimum — measured failing at 36px on real mobile viewports
         justifyContent: 'center',
         paddingHorizontal: 13,
         borderRadius: 999,
@@ -110,7 +104,7 @@ export function Chip({
           fontSize: 12,
           fontWeight: '600',
           fontFamily: F.semi,
-          color: active ? '#FFFFFF' : C.text,
+          color: active ? activeText : C.text,
         }}
       >
         {label}
@@ -142,7 +136,8 @@ export function Btn({
       : variant === 'ok'
       ? C.ok
       : 'transparent';
-  const fg = variant === 'outline' ? C.primary : '#FFFFFF';
+  // primary fill uses onPrimary text; other fills (ok/danger) keep white; outline uses primaryText.
+  const fg = variant === 'outline' ? C.primaryText : variant === 'primary' ? C.onPrimary : '#FFFFFF';
   return (
     <TouchableOpacity
       onPress={onPress}
@@ -152,7 +147,7 @@ export function Btn({
       style={{
         backgroundColor: bg,
         borderWidth: variant === 'outline' ? 1.5 : 0,
-        borderColor: C.primary,
+        borderColor: C.primaryDark,
         opacity: disabled ? 0.45 : 1,
         borderRadius: R.btn,
         minHeight: small ? 38 : 48,
@@ -163,7 +158,7 @@ export function Btn({
         gap: SP.sm,
       }}
     >
-      {loading && <ActivityIndicator size="small" color={fg} />}
+      {loading && <ActivityIndicator size="small" color={fg} aria-label="Memproses" />}
       <Text
         style={{
           color: fg,
@@ -205,9 +200,7 @@ export function Input(props: TextInputProps) {
 export function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <View style={{ gap: 7 }}>
-      <Text style={{ fontSize: 12.5, fontWeight: '600', fontFamily: F.semi, color: C.text }}>
-        {label}
-      </Text>
+      <Text style={T.label}>{label}</Text>
       {children}
     </View>
   );
@@ -217,7 +210,7 @@ export function StatCard({
   title,
   value,
   sub,
-  color = C.primary,
+  color = C.text,
 }: {
   title: string;
   value: string;
@@ -226,29 +219,8 @@ export function StatCard({
 }) {
   return (
     <Card style={{ flex: 1 }}>
-      <Text
-        style={{
-          color: C.muted,
-          fontSize: 10.5,
-          fontWeight: '700',
-          fontFamily: F.semi,
-          letterSpacing: 0.8,
-          textTransform: 'uppercase',
-        }}
-      >
-        {title}
-      </Text>
-      <Text
-        style={{
-          fontSize: 22,
-          fontWeight: '800',
-          fontFamily: F.xbold,
-          color,
-          marginTop: 4,
-        }}
-      >
-        {value}
-      </Text>
+      <Text style={T.caption}>{title}</Text>
+      <Text style={[T.metric, { color, marginTop: 4 }]}>{value}</Text>
       {sub ? <Muted style={{ marginTop: 3 }}>{sub}</Muted> : null}
     </Card>
   );
@@ -289,7 +261,7 @@ export function SectionHeader({
       </View>
       {action && (
         <TouchableOpacity onPress={action.onPress} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-          <Text style={{ color: C.primary, fontFamily: F.bold, fontSize: 13 }}>{action.label}</Text>
+          <Text style={{ color: C.primaryText, fontFamily: F.bold, fontSize: 13 }}>{action.label}</Text>
         </TouchableOpacity>
       )}
     </View>
@@ -305,6 +277,7 @@ export function ListRow({
   onPress,
   emphasis,
   numberOfLines = 1,
+  selected,
 }: {
   title: string;
   subtitle?: string;
@@ -314,6 +287,8 @@ export function ListRow({
   /** garis kiri berwarna — utk menandai status tanpa hanya mengandalkan warna latar */
   emphasis?: { color: string; label: string };
   numberOfLines?: number;
+  /** bila di-set (bukan undefined), tampilkan checkbox seleksi di depan judul */
+  selected?: boolean;
 }) {
   const Wrapper = onPress ? TouchableOpacity : View;
   return (
@@ -322,14 +297,24 @@ export function ListRow({
       activeOpacity={0.7}
       style={{
         flexDirection: 'row',
+        alignItems: selected !== undefined ? 'center' : undefined,
         backgroundColor: C.card,
         borderRadius: R.card,
-        borderWidth: StyleSheet.hairlineWidth,
-        borderColor: C.border,
+        borderWidth: selected ? 1.5 : StyleSheet.hairlineWidth,
+        borderColor: selected ? C.primaryDark : C.border,
         overflow: 'hidden',
       }}
     >
       {emphasis && <View style={{ width: 4, backgroundColor: emphasis.color }} />}
+      {selected !== undefined && (
+        <View style={{ paddingLeft: SP.md }}>
+          <Ionicons
+            name={selected ? 'checkbox' : 'square-outline'}
+            size={22}
+            color={selected ? C.primaryDark : C.faint}
+          />
+        </View>
+      )}
       <View style={{ flex: 1, padding: SP.md }}>
         <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
           <Text style={[T.h3, { flexShrink: 1 }]} numberOfLines={numberOfLines}>
@@ -349,7 +334,7 @@ export function ListRow({
             ) : (
               <View />
             )}
-            {meta ? <Text style={{ fontSize: 11, color: C.faint, fontFamily: F.reg }}>{meta}</Text> : null}
+            {meta ? <Text style={{ fontSize: 11, color: C.muted, fontFamily: F.reg }}>{meta}</Text> : null}
           </View>
         )}
       </View>
@@ -357,7 +342,7 @@ export function ListRow({
   );
 }
 
-/** Badge dgn ikon — status TIDAK hanya diwakili warna (brief §18) */
+/** Badge dgn ikon — status TIDAK hanya diwakili warna */
 export function StatusBadge({
   label,
   color,
@@ -373,7 +358,10 @@ export function StatusBadge({
         flexDirection: 'row',
         alignItems: 'center',
         gap: 4,
-        backgroundColor: color + '1A',
+        // '1A' (~10% alpha) blended the text color's own tint enough to drop
+        // several status colors below the 4.5:1 AA threshold against it —
+        // '08' (~3%) keeps a visible tint with real contrast margin.
+        backgroundColor: color + '08',
         borderRadius: 999,
         paddingHorizontal: 9,
         paddingVertical: 4,
@@ -383,6 +371,77 @@ export function StatusBadge({
       <Ionicons name={icon} size={11} color={color} />
       <Text style={{ color, fontSize: 11, fontWeight: '700', fontFamily: F.semi }}>{label}</Text>
     </View>
+  );
+}
+
+/**
+ * Badge ok/tidak-valid generik (geo-fence absensi, geo-valid kunjungan, dll).
+ * Konsolidasi dari 3 implementasi terpisah (ClockCard, VisitFlowScreen,
+ * MerchantDetailScreen) yang masing-masing menghitung warna/ikon sendiri.
+ */
+export function GeoValidBadge({
+  ok,
+  okLabel,
+  badLabel,
+}: {
+  ok: boolean;
+  okLabel: string;
+  badLabel: string;
+}) {
+  return (
+    <StatusBadge
+      label={ok ? okLabel : badLabel}
+      color={ok ? C.ok : C.accent}
+      icon={ok ? 'checkmark-circle' : 'warning'}
+    />
+  );
+}
+
+/** Footer tombol yang menempel di bawah layar (CHECK IN / CHECK OUT dsb). */
+export function StickyFooter({ children }: { children: React.ReactNode }) {
+  return (
+    <View
+      style={{
+        position: 'absolute',
+        left: 0,
+        right: 0,
+        bottom: 0,
+        backgroundColor: C.card,
+        borderTopWidth: StyleSheet.hairlineWidth,
+        borderColor: C.border,
+        alignItems: 'center',
+      }}
+    >
+      <View style={{ padding: SP.lg, paddingTop: 10, gap: SP.sm, maxWidth: 900, width: '100%' }}>{children}</View>
+    </View>
+  );
+}
+
+/** Garis pemisah tipis — dipakai daripada tiap layar bikin View 1px sendiri. */
+export function Divider({ style }: { style?: object }) {
+  return <View style={[{ height: StyleSheet.hairlineWidth, backgroundColor: C.border }, style]} />;
+}
+
+/** Ikon dengan target tap yang konsisten — pembungkus tipis di atas Ionicons. */
+export function IconButton({
+  name,
+  size = 20,
+  color = C.text,
+  onPress,
+}: {
+  name: keyof typeof Ionicons.glyphMap;
+  size?: number;
+  color?: string;
+  onPress?: () => void;
+}) {
+  return (
+    <TouchableOpacity
+      onPress={onPress}
+      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+      accessibilityRole="button"
+    >
+      <Ionicons name={name} size={size} color={color} />
+    </TouchableOpacity>
   );
 }
 
@@ -398,7 +457,7 @@ export function FunnelChart({ steps }: { steps: Array<{ label: string; value: nu
           <View key={s.label}>
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 3 }}>
               <Text style={{ fontSize: 11.5, color: C.text, fontFamily: F.semi }}>{s.label}</Text>
-              <Text style={{ fontSize: 11.5, color, fontFamily: F.bold }}>{s.value}</Text>
+              <Text style={{ fontSize: 11.5, color, fontFamily: F.semi }}>{s.value}</Text>
             </View>
             <View style={{ height: 10, borderRadius: 5, backgroundColor: C.divider }}>
               <View style={{ width: `${pct}%`, height: 10, borderRadius: 5, backgroundColor: color }} />
@@ -416,11 +475,11 @@ const KPI_STATUS: Record<KPIStatus, { color: string; icon: keyof typeof Ionicons
   ok: { color: C.ok, icon: 'checkmark-circle', label: 'On Track' },
   warn: { color: C.warn, icon: 'alert-circle', label: 'Perlu Perhatian' },
   danger: { color: C.accent, icon: 'close-circle', label: 'Di Bawah Target' },
-  neutral: { color: C.faint, icon: 'ellipse-outline', label: 'Belum Ada Data' },
+  neutral: { color: C.muted, icon: 'ellipse-outline', label: 'Belum Ada Data' },
 };
 
 /**
- * Kartu KPI enterprise: metric + target + variance + status + trend (brief §8).
+ * Kartu KPI enterprise: metric + target + variance + status + trend.
  * Status TIDAK hanya diwakili warna — selalu disertai ikon + label teks.
  */
 export function KPICard({
@@ -454,11 +513,13 @@ export function KPICard({
         padding: SP.lg,
         borderWidth: StyleSheet.hairlineWidth,
         borderColor: C.border,
+        borderTopWidth: 2.5,
+        borderTopColor: st.color,
         ...ELEV[1],
       }}
     >
       <Text style={T.caption}>{title}</Text>
-      <Text style={[T.metric, { color: C.text, marginTop: 4 }]}>{value}</Text>
+      <Text style={[T.metric, { marginTop: 4 }]}>{value}</Text>
       {target ? <Muted style={{ marginTop: 2 }}>{target}</Muted> : null}
       {trend && (
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3, marginTop: 6 }}>
@@ -466,10 +527,12 @@ export function KPICard({
           <Text style={{ fontSize: 11, color: trendColor, fontFamily: F.semi }}>{trend.label}</Text>
         </View>
       )}
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 8 }}>
-        <Ionicons name={st.icon} size={13} color={st.color} />
-        <Text style={{ fontSize: 11, color: st.color, fontFamily: F.semi }}>{statusLabel ?? st.label}</Text>
-      </View>
+      {(status !== 'neutral' || statusLabel) && (
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 8 }}>
+          <Ionicons name={st.icon} size={13} color={st.color} />
+          <Text style={{ fontSize: 11, color: st.color, fontFamily: F.semi }}>{statusLabel ?? st.label}</Text>
+        </View>
+      )}
     </View>
   );
 }
@@ -500,7 +563,7 @@ export function ErrorState({ text, onRetry }: { text: string; onRetry?: () => vo
       <Text style={{ color: C.text, fontSize: 13, fontFamily: F.semi, textAlign: 'center' }}>{text}</Text>
       {onRetry && (
         <TouchableOpacity onPress={onRetry}>
-          <Text style={{ color: C.primary, fontFamily: F.bold, fontSize: 13 }}>Coba lagi</Text>
+          <Text style={{ color: C.primaryText, fontFamily: F.bold, fontSize: 13 }}>Coba lagi</Text>
         </TouchableOpacity>
       )}
     </View>
@@ -513,7 +576,7 @@ export function MiniBar({
   value,
   max,
   suffix,
-  color = C.primary,
+  color = C.primaryText,
 }: {
   label: string;
   value: number;
@@ -526,7 +589,7 @@ export function MiniBar({
     <View style={{ marginTop: 10 }}>
       <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
         <Text style={{ fontSize: 12, color: C.muted, fontFamily: F.reg }}>{label}</Text>
-        <Text style={{ fontSize: 12, fontWeight: '700', fontFamily: F.bold, color }}>
+        <Text style={{ fontSize: 12, fontFamily: F.bold, color }}>
           {value}
           {suffix ?? ''}
         </Text>

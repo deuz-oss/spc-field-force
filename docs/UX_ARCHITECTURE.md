@@ -1,46 +1,43 @@
-# SPC Field Force — UX Architecture
+# UX Architecture
 
-## Navigation model
+The information architecture, role→navigation mapping, and dashboard composition below were established in v1 (`7d54290`) and validated as structurally sound during the v2 planning pass — v2 changed the visual system (`DESIGN_SYSTEM.md`) and responsive nav tiers, not the IA. This doc is updated only where the v2 pass changed something structural (the tablet nav tier) or where a detail below is now visually stale (colors, rail widths).
 
-The existing role→tab-set mapping in `App.tsx` was already correct (see `UI_UX_AUDIT.md` §"Role-based IA decision") and was **kept**:
+## Role → navigation
+
+Each role sees a distinct tab set reflecting what they're actually responsible for — not one generic tab bar with permission-gated screens:
 
 | Role | Tabs |
 |---|---|
-| Super Admin | Dashboard, Merchant, Laporan, Pengguna, Profil |
-| Ops Manager / Team Lead / Client | Dashboard, Merchant, Laporan, Profil |
-| Field Agent | Dashboard, Merchant, Kunjungan, Absensi, Profil |
+| Field Agent / Team Lead | Dashboard, Merchants, Attendance, Profile |
+| Ops Manager / Super Admin | Dashboard, Merchants, Users, Reports, Live Map, Profile |
 
-What changed is the **shell rendering it**, in `App.tsx`:
+`App.tsx` derives the tab set from `me.role` at mount — no client-side route guarding needed beyond that, since each role only ever sees its own screen stack.
 
-- **Mobile (<900dp width):** bottom tab bar, unchanged position/behavior from the original app — muscle memory preserved.
-- **Tablet/Web (≥900dp width):** a persistent 232px dark left rail replaces the bottom bar, showing the same routes plus a user-identity header (name + role). The active screen's content area gets `marginLeft: 232` via `sceneStyle` so nothing overlaps.
-- **Header:** previously the app rendered a Stack header ("Main") *and* a Tab header (screen title) stacked on top of each other. The Stack screen now sets `headerShown: false`, leaving one header, which also now carries a role badge on the right (`ROLE_LABEL[role]`) so context is visible on every screen, not just Profile.
+## Responsive nav — 3 tiers
 
-This is implemented as a custom `tabBar` render prop (`ResponsiveTabBar` in `App.tsx`) rather than a second navigator, so there is exactly one source of truth for the active route.
+v1 shipped a binary split (bottom tabs below 900dp, full rail at ≥900dp), which meant the 700–899dp tablet range got the exact same cramped bottom-tab treatment as a 360px phone despite having plenty of width to spare. `useBreakpoint()` already exposed `isTablet`/`isDesktop`/`isWideDesktop`, but `App.tsx` only ever consumed `isDesktop`. v2 fixes this with a real 3-tier nav:
 
-## Per-role workflow (dashboard composition)
+| Width | Tier | Shape |
+|---|---|---|
+| < 700dp | Phone | Bottom tab bar, icon + label, ink background |
+| 700–899dp | Compact tablet rail (**new in v2**) | 76px left rail, icon-only, no labels, no user-identity header |
+| ≥ 900dp | Full desktop rail | 232px left rail, icon + label, user identity header, gold left-accent active state |
 
-`DashboardScreen.tsx` now branches into two real layouts sharing the same store data:
+All three tiers share the same ink (`C.railBg`) background and gold (`C.primary`) active-state accent — only density/labeling changes with width, not the visual language.
 
-```
-role === 'field_agent'
-  → FieldAgentDashboard
-      ClockCard (attendance hero)
-      2 personal KPI cards (visits, valid-visit%)
-      "Merchant Prioritas" — assigned merchants, cold-start first, tap → MerchantDetail
-      Personal funnel
+## Dashboard composition
 
-everyone else
-  → management layout
-      5-card KPI strip (Agen Aktif, Geo-fence, Kunjungan, Valid Visit, Merchant Activated)
-      "Perlu Perhatian" exceptions list (only agents currently below target — hidden if none)
-      Team funnel (FunnelChart)
-      Merchant status snapshot
-      Performance KPI — per-agent rows, tap to expand compliance detail + individual funnel
-```
+Two structurally different dashboards, not one dashboard with conditional widgets:
 
-The Field Agent view deliberately omits: team funnel, org-wide merchant snapshot, cross-agent performance table — none of it is actionable for someone whose job is "visit merchants today," per brief §5/§7.
+- **Field Agent / Team Lead** — `ClockCard` (live clock-in/out with geo-fence badge and running timer) at top, since "am I clocked in, and is today's session valid" is the single most important fact for this role in the moment; assigned-merchant list below it, sortable by proximity/priority.
+- **Ops Manager / Super Admin** — KPI-card row (headline metrics), an exceptions list (geo-fence violations, stalled merchants, overdue visits — the things that need a human decision), and a funnel chart (cold-start → registered → activated) below. No clock-in card — these roles don't clock in themselves.
 
-## Screen-level flows unaffected
+This split is why `DashboardScreen.tsx` contains two largely-independent component trees (`FieldAgentDashboard`, `ManagementDashboard`) rather than one parameterized component — the information needs are different enough that forcing a shared shape would have made both worse.
 
-Merchant assignment, CSV import, user/team management, visit check-in/out, attendance clock-in/out, CSV/report export, and the Option 3 fee estimator all use the **same store actions and validation** as before (`useStore.ts` was not modified). Only presentation and information hierarchy changed. See `UI_UX_AUDIT.md` for the per-screen rationale and `VISUAL_QA.md` for before/after evidence.
+## Detail-screen pattern
+
+Merchant, Visit, and Attendance detail screens share a consistent shape: a summary `Card` at top, a map (`LeafletMap`) where geodata is relevant, a scrollable history/detail list below, and — for the two screens with an in-progress user action (merchant check-in, visit check-out) — a `StickyFooter` action bar pinned to the bottom of the screen rather than requiring a scroll to reach the primary CTA.
+
+## What v2 did not change
+
+Zustand store shape, Supabase schema/RLS, KPI calculation logic (`utils/kpi.ts`), and every IA decision above — all untouched. See `DESIGN_SYSTEM.md` for what did change.

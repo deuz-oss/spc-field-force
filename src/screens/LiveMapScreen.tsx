@@ -1,8 +1,8 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { ScrollView, View } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
-import { LeafletMap, MapMarker } from '../components/LeafletMap';
-import { Card, Empty, ListRow, SectionHeader, StatusBadge } from '../components/ui';
+import { LeafletMap, MapMarker, MapPlaceholder } from '../components/LeafletMap';
+import { Card, ListRow, SectionHeader, StatusBadge } from '../components/ui';
 import { C } from '../theme';
 import { TRACK_INTERVAL_MS } from '../config';
 import { useStore } from '../store/useStore';
@@ -54,16 +54,16 @@ export default function LiveMapScreen() {
 
   return (
     <View style={{ flex: 1 }}>
-      <ScrollView contentContainerStyle={{ padding: 16, gap: 12, maxWidth: 900, width: '100%', alignSelf: 'center' }}>
+      <ScrollView tabIndex={0} role="main" contentContainerStyle={{ padding: 16, gap: 12, maxWidth: 900, width: '100%', alignSelf: 'center' }}>
         <SectionHeader title="Peta Live" subtitle={`${active.length} agen sedang bekerja sekarang`} />
 
-        {active.length > 0 ? (
-          <Card>
+        <Card>
+          {active.length > 0 ? (
             <LeafletMap height={360} markers={markers} />
-          </Card>
-        ) : (
-          <Empty text="Tidak ada agen yang sedang clock-in saat ini." />
-        )}
+          ) : (
+            <MapPlaceholder height={360} text="Tidak ada agen yang sedang clock-in saat ini." />
+          )}
+        </Card>
 
         <View style={{ gap: 8 }}>
           {active.map((a) => {

@@ -1,7 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import {
   Image,
-  Linking,
   ScrollView,
   Text,
   TouchableOpacity,
@@ -10,10 +9,10 @@ import {
 import { useNavigation, useRoute } from '@react-navigation/native';
 import * as DocumentPicker from 'expo-document-picker';
 import * as ImagePicker from 'expo-image-picker';
-import { Badge, Btn, Card, Chip, Field, H, Input, Muted, StatusBadge } from '../components/ui';
+import { Badge, Btn, Card, Chip, Field, GeoValidBadge, H, Input, Muted, StatusBadge, StickyFooter } from '../components/ui';
 import { showDialog } from '../components/dialog';
 import { RESULT_LABEL, RESULT_ORDER, VISIT_VALID_RADIUS_M } from '../config';
-import { C } from '../theme';
+import { C, F, T } from '../theme';
 import { useCurrentUser, useStore } from '../store/useStore';
 import { VisitDoc, VisitResult } from '../types';
 import { fmtDurClock, fmtDateTime } from '../utils/format';
@@ -196,7 +195,19 @@ export default function VisitFlowScreen() {
 
   return (
     <View style={{ flex: 1 }}>
-    <ScrollView contentContainerStyle={{ padding: 16, gap: 12, paddingBottom: editable ? 110 : 24 }} keyboardShouldPersistTaps="handled">
+      <ScrollView
+        tabIndex={0}
+        role="main"
+        contentContainerStyle={{
+          padding: 16,
+          gap: 12,
+          paddingBottom: editable ? 110 : 24,
+          maxWidth: 900,
+          width: '100%',
+          alignSelf: 'center',
+        }}
+        keyboardShouldPersistTaps="handled"
+      >
       <Card>
         <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
           <H style={{ flexShrink: 1 }}>{merchant?.name ?? '-'}</H>
@@ -210,19 +221,17 @@ export default function VisitFlowScreen() {
               <StatusBadge label="Sesi lama — perlu ditinjau" color={C.warn} icon="time-outline" />
             </View>
           ) : (
-            <Text style={{ fontSize: 28, fontWeight: '900', color: C.primary, marginTop: 4 }}>
-              {fmtDurClock(now - visit.checkInAt)}
-            </Text>
+            <Text style={[T.timer, { marginTop: 4 }]}>{fmtDurClock(now - visit.checkInAt)}</Text>
           )
         )}
         <View style={{ flexDirection: 'row', gap: 8, marginTop: 8, flexWrap: 'wrap' }}>
-          <StatusBadge
-            label={visit.geoValid ? `Geo valid (${visit.merchantDistanceM ?? '-'} m)` : `Di luar radius (${visit.merchantDistanceM ?? '?'} m)`}
-            color={visit.geoValid ? C.ok : C.accent}
-            icon={visit.geoValid ? 'checkmark-circle' : 'warning'}
+          <GeoValidBadge
+            ok={visit.geoValid}
+            okLabel={`Geo valid (${visit.merchantDistanceM ?? '-'} m)`}
+            badLabel={`Di luar radius (${visit.merchantDistanceM ?? '?'} m)`}
           />
         </View>
-        {!editable && (
+        {editable && (
           <View style={{ marginTop: 8 }}>
             <Btn
               small
@@ -328,7 +337,7 @@ export default function VisitFlowScreen() {
                   updateVisit(visit.id, { docs: visit.docs.filter((_, j) => j !== i) });
                 }}
               >
-                <Text style={{ color: C.accent, fontWeight: '700' }}>Hapus</Text>
+                <Text style={{ color: C.accent, fontFamily: F.bold }}>Hapus</Text>
               </TouchableOpacity>
             )}
           </View>
@@ -352,27 +361,13 @@ export default function VisitFlowScreen() {
           <Muted>Kunjungan masih berlangsung — menunggu agen melakukan check-out.</Muted>
         </Card>
       ) : null}
-    </ScrollView>
+      </ScrollView>
 
       {editable && (
-        // sticky footer — dirender sbg sibling ScrollView di dalam View flex:1 pembungkus
-        <View
-          style={{
-            position: 'absolute',
-            left: 0,
-            right: 0,
-            bottom: 0,
-            padding: 16,
-            paddingTop: 10,
-            gap: 8,
-            backgroundColor: C.card,
-            borderTopWidth: 1,
-            borderColor: C.border,
-          }}
-        >
+        <StickyFooter>
           <Btn title="CHECK OUT & Simpan" variant="ok" onPress={checkOut} />
           <Btn small variant="outline" title="Simpan Draf (kembali nanti)" onPress={() => navigation.goBack()} />
-        </View>
+        </StickyFooter>
       )}
     </View>
   );

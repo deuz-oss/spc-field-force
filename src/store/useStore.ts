@@ -813,7 +813,8 @@ export const useStore = create<StoreState>()((set, get) => ({
     const a = get().attendances.find((x) => x.userId === userId && !x.clockOutAt);
     if (!a) return false;
     const t = Date.now();
-    const shouldAddPoint = haversineM(a.route[a.route.length - 1] ?? a, pos) > TRACK_MIN_STEP_M;
+    const shouldAddPoint =
+      haversineM(a.route[a.route.length - 1] ?? { lat: a.clockInLat, lng: a.clockInLng }, pos) > TRACK_MIN_STEP_M;
     const before = get().attendances;
     set({
       attendances: before.map((x) =>

@@ -29,7 +29,7 @@ export function parseCsv(text: string): string[][] {
       row = [];
     } else field += c;
   }
-  if (field !== '' || row.length > 1) {
+  if (field !== '' || row.length > 0) {
     row.push(field);
     rows.push(row);
   }

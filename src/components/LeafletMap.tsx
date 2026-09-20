@@ -1,7 +1,7 @@
 import React from 'react';
-import { ActivityIndicator, Platform, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Platform, StyleSheet, Text, View } from 'react-native';
 import WebView from 'react-native-webview';
-import { C, R } from '../theme';
+import { C, F, R } from '../theme';
 
 export interface MapMarker {
   lat: number;
@@ -50,7 +50,7 @@ D.markers.forEach(function(mk){
    .addTo(map).bindTooltip(mk.label||'',{permanent:false,direction:'top'});
 });
 if(D.polyline.length>1){
-  L.polyline(D.polyline.map(function(p){return [p.lat,p.lng];}),{color:'${C.primary}',weight:4,opacity:.9}).addTo(map);
+  L.polyline(D.polyline.map(function(p){return [p.lat,p.lng];}),{color:'${C.primaryDark}',weight:4,opacity:.9}).addTo(map);
 }
 if(D.fit){
   var b=[];D.markers.forEach(function(mk){b.push([mk.lat,mk.lng]);});
@@ -87,7 +87,7 @@ if(D.fit){
         startInLoadingState
         renderLoading={() => (
           <View style={[StyleSheet.absoluteFill, { alignItems: 'center', justifyContent: 'center' }]}>
-            <ActivityIndicator color={C.primary} />
+            <ActivityIndicator color={C.primaryDark} aria-label="Memuat peta" />
           </View>
         )}
       />
@@ -101,15 +101,13 @@ export function MapPlaceholder({ height = 120, text }: { height?: number; text: 
     <View
       style={{
         height,
-        borderRadius: 12,
+        borderRadius: R.card,
         backgroundColor: C.divider,
         alignItems: 'center',
         justifyContent: 'center',
       }}
     >
-      <Text style={{ color: C.muted }}>{text}</Text>
+      <Text style={{ color: C.muted, fontFamily: F.reg, fontSize: 13 }}>{text}</Text>
     </View>
   );
 }
-
-export const Touchable = TouchableOpacity;

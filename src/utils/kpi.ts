@@ -129,7 +129,7 @@ export function computeStat(
 }
 
 export function statusOf(s: AgentStat): { label: string; color: string } {
-  if (s.days === 0) return { label: 'Tanpa Absensi', color: C.faint };
+  if (s.days === 0) return { label: 'Tanpa Absensi', color: C.muted };
   let fails = 0;
   if (s.workMs < s.targetWorkMs * 0.75) fails++;
   if (s.onSiteMs < s.targetOnsiteMs * 0.6) fails++;
@@ -146,5 +146,7 @@ export type SortKey = 'visits' | 'hours' | 'activated';
 export function sortVal(s: AgentStat, key: SortKey): number {
   if (key === 'visits') return s.visits;
   if (key === 'hours') return s.workMs;
-  return s.funnel[6] + s.funnel[5];
+  // funnel[5] = visits reaching "Redemption" or later (cumulative) — this already
+  // includes funnel[6] ("Cold Start Selesai"), so it alone is the activated count.
+  return s.funnel[5];
 }
